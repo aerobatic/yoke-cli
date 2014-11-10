@@ -1,0 +1,9 @@
+{
+  "templates": [
+    {
+      "title": "test template",
+      "buildTools": ["grunt"],
+      "gitHubRepo": "aerobatic/test-template"
+    }
+  ]
+}

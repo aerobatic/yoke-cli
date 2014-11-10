@@ -1,0 +1,77 @@
+#!/usr/bin/env node
+
+var program = require('commander');
+var chalk = require('chalk');
+var inquirer = require('inquirer');
+var uiHelper = require('../lib/uiHelper');
+
+program.version(require('../package.json').version)
+  .option('-d, --debug', 'Emit debug messages');
+
+function commandAction(name) {
+  return function() {
+    debugger;
+    if (program.debug)
+      process.env.YOKE_DEBUG = '1';
+
+    require('../commands/' + name)(program, function(err) {
+      if (err)
+        uiHelper.error(err);
+
+      process.exit();
+    });
+  };
+}
+
+program 
+  .command('login')
+  .description("Write the login credentials")
+  .action(commandAction('login'));
+
+program 
+  .command('app:create')
+  .description('Create a new Aerobatic app')
+  .action(commandAction('appCreate'));
+
+program
+  .option('-w, --watch', 'Watch for code changes')
+  .command('sim')
+  .description('Run the local simulator server')
+  .action(function() {
+    console.log("Watch for changes: ", program.watch);
+    // Run the watch task
+    // buildTool('watch');
+
+    // Figure out which tasks to run ahead of the simulator
+    // Run the watch task
+    // Start the simulator server
+    process.exit();
+  });
+
+
+program
+  .option('-m, --message', 'Version message')
+  .command('deploy')
+  .description('Deploy a new version of the app')
+  .action(function() {
+    // Read the files to deploy from the package.json 
+  });
+
+
+program
+  .command('build')
+  .description('Run a local simulator asset server')
+  .action(function(){
+    // Look to see if there is a Gruntfile.js in the current directory
+
+    // Programmatically run grunt
+    var gruntCli = require('grunt').cli;
+    gruntCli.tasks = ['build'];
+    gruntCli({}, function() {
+      debugger; 
+
+      console.log("Done running the grunt build task");
+    });
+  });
+
+program.parse(process.argv);
