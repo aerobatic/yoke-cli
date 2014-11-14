@@ -3,16 +3,31 @@
 var program = require('commander');
 var chalk = require('chalk');
 var inquirer = require('inquirer');
+var osenv = require('osenv');
+var path = require('path');
+var fs = require('fs');
+var _ = require('lodash');
 var uiHelper = require('../lib/uiHelper');
 
 program.version(require('../package.json').version)
-  .option('-d, --debug', 'Emit debug messages');
+  .option('-d, --debug', 'Emit debug messages')
+  .option('-u, --userId', 'User id. If not provided the credentials in the .aerobatic file are used')
+  .option('-k, --secretKey', 'User secret key')
+  .option('--dev', 'Run yoke against the developement environment')
 
-function commandAction(name) {
+function commandAction(name, requireLogin) {
   return function() {
-    debugger;
-    if (program.debug)
-      process.env.YOKE_DEBUG = '1';
+    setProgramDefaults();
+
+    // If login is required to run this command and the user and key were 
+    // not passed in as arguments, then look up the .aerobatic file.
+    if (requireLogin === true && !(program.user && program.key)) {
+      var err = loadCredentials();
+      if (err) {
+        uiHelper.error(err);
+        process.exit();
+      }
+    }
 
     require('../commands/' + name)(program, function(err) {
       if (err)
@@ -31,7 +46,7 @@ program
 program 
   .command('app:create')
   .description('Create a new Aerobatic app')
-  .action(commandAction('appCreate'));
+  .action(commandAction('appCreate', true));
 
 program
   .option('-w, --watch', 'Watch for code changes')
@@ -68,10 +83,40 @@ program
     var gruntCli = require('grunt').cli;
     gruntCli.tasks = ['build'];
     gruntCli({}, function() {
-      debugger; 
-
       console.log("Done running the grunt build task");
     });
   });
 
 program.parse(process.argv);
+
+function setProgramDefaults() {
+  if (program.debug)
+    process.env.YOKE_DEBUG = '1';
+  if (program.dev)
+    process.env.AEROBATIC_ENV = 'dev';
+}
+
+function loadCredentials() {
+  var aerobaticDotFile = path.join(osenv.home(), '.aerobatic');
+  uiHelper.debug("Loading credentials from %s", aerobaticDotFile);
+
+  // TODO: Check that .aerobatic file doesn't have overly permissive access similar to how openSSH does.
+  if (!fs.existsSync(aerobaticDotFile)) {
+    uiHelper.error("No .aerobatic file exists. First run 'yoke login'");
+    process.exit();
+  }
+
+  var credentials;
+  try {
+    credentials = JSON.parse(fs.readFileSync(aerobaticDotFile));
+  }
+  catch (e) {
+    return "Could not parse .aerobatic file JSON. Try re-running 'yoke login'";
+  }
+  
+  if (_.isEmpty(credentials.userId) || _.isEmpty(credentials.secretKey))
+    return "Missing information in .aerobatic file. Try re-running 'yoke login'";
+
+  uiHelper.debug("Credentials loaded, userId=%s", credentials.userId);
+  _.extend(program, credentials);
+}

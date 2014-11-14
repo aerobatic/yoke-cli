@@ -7,11 +7,16 @@ var fs = require('fs');
 var tarStream = require('tar-stream');
 var sinon = require('sinon');
 var rimraf = require('rimraf');
+var bodyParser = require('body-parser');
+var uiHelper = require('../../lib/uiHelper');
 var appCreate = require('../../commands/appCreate');  
+var shortid = require('shortid');
 
 describe('create app', function() {
   before(function(done) {
     process.env.YOKE_DEBUG = '1';
+    this.tmp = path.join(__dirname, '../../tmp');
+    process.stdout.write('\n');
 
     this.templates = [
       {
@@ -23,12 +28,14 @@ describe('create app', function() {
 
     var self = this;
     // Create an express server to simulate npm, GitHub, and bower
-    var repoServer = express();
-    repoServer.get('/metadata/templates.json', function(req, res) {
+    var mockServer = express();
+    mockServer.use(bodyParser.json());
+
+    mockServer.get('/metadata/templates.json', function(req, res) {
       res.send(JSON.stringify({templates: self.templates}));
     });
 
-    repoServer.get('/github/' + this.templates[0].gitHubRepo + '/archive/' + this.templates[0].buildTools[0] + '.tar.gz', function(req, res) {
+    mockServer.get('/github/' + this.templates[0].gitHubRepo + '/archive/' + this.templates[0].buildTools[0] + '.tar.gz', function(req, res) {
       // Build a tar file on the fly.
       var pack = tarStream.pack();
 
@@ -41,7 +48,8 @@ describe('create app', function() {
         }
       };
 
-      pack.entry({ name: 'archive/package.json' }, JSON.stringify(packageJson));
+      if (self.includePackageJsonInTemplate !== false)
+        pack.entry({ name: 'archive/package.json' }, JSON.stringify(packageJson));
 
       // TODO: Write a bower.json file
 
@@ -52,7 +60,7 @@ describe('create app', function() {
       pack.pipe(zlib.createGzip()).pipe(res);
     });
 
-    repoServer.get('/npm/dependency.tar.gz', function(req, res) {
+    mockServer.get('/npm/dependency.tar.gz', function(req, res) {
       var pack = tarStream.pack();
       pack.entry({name: 'dependency/package.json'}, JSON.stringify({name: 'dependency', version:'0.0.1', description:'sample module', repository:{}}));
       pack.entry({name: 'dependency/index.js'}, "module.exports={}");
@@ -63,49 +71,99 @@ describe('create app', function() {
       pack.pipe(zlib.createGzip()).pipe(res);
     });
 
-    repoServer.listen(9999, function() {
+    this.createdAppId = shortid.generate();
+    mockServer.post('/api/apps', function(req, res) {
+      debugger;
+      res.json({
+        appId: self.createdAppId,
+        name: req.body.name
+      });
+    });
+
+    mockServer.listen(9999, function() {
+      uiHelper.progress("Mock server listening on port 9999");
       done();
     });
   });
 
   beforeEach(function() {
     var self = this;
+    self.includePackageJsonInTemplate = true;
 
-    process.stdout.write('\n');
-    this.tmp = path.join(__dirname, '../../tmp');
     rimraf.sync(this.tmp);
     fs.mkdirSync(this.tmp);
 
     this.appName = 'test-app';
 
-    this.appCreateCommand = appCreate({
+    this.program = {
       templatesUrl: 'http://localhost:9999/metadata/templates.json',
       gitHubUrl: 'http://localhost:9999/github',
+      apiUrl: "http://localhost:9999",
       inquirer: {
         prompt: sinon.spy(function(questions, callback) {
           callback({
             appName: self.appName,
+            startingMode: 'scratch',
             template: self.templates[0],
             buildTool: 'grunt'
           });
         })
       },
       baseDir: self.tmp
-    });
+    };
   });
 
   it('creates app', function(done) {
     var program = {};
     var self = this;
-    this.appCreateCommand(program, function(err) {
+    appCreate(this.program, function(err, app) {
       if (err) return done(err);
 
       var appDir = path.join(self.tmp, self.appName);
       assert.ok(fs.existsSync(appDir));
       assert.ok(fs.existsSync(appDir + '/package.json'));
       assert.ok(fs.existsSync(appDir + '/node_modules/dependency'));
+      assert.equal(app.appId, self.createdAppId);
+
+      done();
+    });
+  });
+
+  it('updates package.json file', function(done) {
+    var program = {};
+    var self = this;
+    appCreate(this.program, function(err, app) {
+      if (err) return done(err);
+
+      var packageJsonPath = path.join(self.tmp, self.appName, 'package.json');
+      assert.ok(fs.existsSync(packageJsonPath));
 
 
+      var packageJson = JSON.parse(fs.readFileSync(packageJsonPath));
+      assert.equal(packageJson._aerobatic.appId, app.appId);
+      done();
+    });
+  });
+
+  it('creates new package.json if no template used', function(done) {
+    this.program.inquirer.prompt = function(questions, callback) {
+      callback({
+        appName: self.appName,
+        startingMode: 'scratch',
+        template: null
+      });
+    };
+
+    var program = {};
+    var self = this;
+    appCreate(this.program, function(err, app) {
+      if (err) return done(err);
+
+      var packageJsonPath = path.join(self.tmp, self.appName, 'package.json');
+      assert.ok(fs.existsSync(packageJsonPath));
+
+      var packageJson = JSON.parse(fs.readFileSync(packageJsonPath));
+      assert.equal(packageJson._aerobatic.appId, app.appId);
       done();
     });
   });

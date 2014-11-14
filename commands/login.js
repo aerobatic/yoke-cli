@@ -2,7 +2,8 @@ var inquirer = require('inquirer'),
   chalk = require('chalk'),
   fs = require('fs'),
   path = require('path'),
-  osenv = require('osenv');
+  osenv = require('osenv'),
+  uiHelper = require('../lib/uiHelper');
 
 module.exports = function(program, done) {
   var questions = [
@@ -18,9 +19,9 @@ module.exports = function(program, done) {
       type: 'input',
       name: 'secretKey',
       validate: function(input) {
-        if (/^[a-z0-9]+$/.test(input) === false)
+        if (/^[a-z0-9]+$/i.test(input) === false)
           return 'Value can only contain lowercase letters and numbers';
-        else if (input.length != 20)
+        else if (input.length != 30)
           return 'Value is ' + input.length + ' characters long. Must be 20 characters.';
         else
           return true;
@@ -29,10 +30,6 @@ module.exports = function(program, done) {
     }
   ];
 
-  // var ui = new inquirer.ui.BottomBar();
-  // ui.log.write("You can get your userId and secretKey from your Aerobatic profile: https://portal.aerobaticapp.com/profile");
-  // ui.log.write("------------------------")
-
   console.log("You can access your userId and secretKey on your Aerobatic profile:")
   console.log("https://portal.aerobaticapp.com/profile");
 
@@ -40,8 +37,8 @@ module.exports = function(program, done) {
     // Write the values to the .aerobatic file
     var file = path.join(osenv.home(), '.aerobatic');
     
-    console.log(chalk.cyan("! Writing userId and secretKey to file: " + file));
-    console.log(chalk.cyan("! You can now make API calls from the yoke CLI"));
+    uiHelper.progress("Writing userId and secretKey to file: " + file);
+    uiHelper.progress("You can now make API calls from the yoke CLI");
 
     fs.writeFile(file, JSON.stringify(answers), done);
   });
