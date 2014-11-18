@@ -21,7 +21,7 @@ module.exports = function(program, done) {
       validate: function(input) {
         if (/^[a-z0-9]+$/i.test(input) === false)
           return 'Value can only contain lowercase letters and numbers';
-        else if (input.length != 30)
+        else if (input.length !== 30)
           return 'Value is ' + input.length + ' characters long. Must be 20 characters.';
         else
           return true;
@@ -30,7 +30,7 @@ module.exports = function(program, done) {
     }
   ];
 
-  console.log("You can access your userId and secretKey on your Aerobatic profile:")
+  console.log("You can access your userId and secretKey on your Aerobatic profile:");
   console.log("https://portal.aerobaticapp.com/profile");
 
   inquirer.prompt(questions, function( answers ) {

@@ -27,9 +27,10 @@ module.exports = function(program, done) {
     log.blankLine();
 
     if (answers.confirmExistingDir === false)
-      return done("Please re-run 'yoke app:create' from the root of the directory where your existing app code resides.")
+      return done("Please re-run 'yoke app:create' from the root of the " +
+        "directory where your existing app code resides.");
 
-    var tasks = [];
+    var tasks = [], appDir;
     if (answers.startingMode === 'scratch') {
       // Create a new directory corresponding to the app name
       appDir = path.join(program.baseDir, answers.appName);
@@ -123,7 +124,7 @@ module.exports = function(program, done) {
         type: 'list',
         name: 'orgId',
         choices: _.map(lookups.organizations, function(org) {
-          return {name: org.name, value: org.orgId}
+          return {name: org.name, value: org.orgId};
         }),
         message: "Which organization does this app belong?"
       }); 
@@ -147,7 +148,7 @@ module.exports = function(program, done) {
       name: 'confirmExistingDir',
       message: 'Is this directory ' + program.baseDir + ' the location of your existing code?',
       when: function(answers) {
-        return answers.startingMode == 'existing';
+        return answers.startingMode === 'existing';
       }
     });
 
@@ -312,7 +313,7 @@ module.exports = function(program, done) {
           fs.writeFile(packageJsonPath, JSON.stringify(packageJson, null, 2), callback);
         });
       }
-    })
+    });
   }
 
   // Check if the specified app name is already in use by an app.

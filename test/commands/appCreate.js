@@ -1,4 +1,5 @@
 var mocha = require('mocha');
+var util = require('util');
 var assert = require('assert');
 var path = require('path');
 var express = require('express');
@@ -8,7 +9,7 @@ var tarStream = require('tar-stream');
 var sinon = require('sinon');
 var rimraf = require('rimraf');
 var bodyParser = require('body-parser');
-var uiHelper = require('../../lib/uiHelper');
+var log = require('../../lib/log');
 var appCreate = require('../../commands/appCreate');  
 var shortid = require('shortid');
 
@@ -35,7 +36,11 @@ describe('create app', function() {
       res.send(JSON.stringify({templates: self.templates}));
     });
 
-    mockServer.get('/github/' + this.templates[0].gitHubRepo + '/archive/' + this.templates[0].buildTools[0] + '.tar.gz', function(req, res) {
+    var starterTemplateUrl = util.format('/github/%s/archive/%s.tar.gz',
+      this.templates[0].gitHubRepo,
+      this.templates[0].buildTools[0]);
+
+    mockServer.get(starterTemplateUrl, function(req, res) {
       // Build a tar file on the fly.
       var pack = tarStream.pack();
 
@@ -62,7 +67,9 @@ describe('create app', function() {
 
     mockServer.get('/npm/dependency.tar.gz', function(req, res) {
       var pack = tarStream.pack();
-      pack.entry({name: 'dependency/package.json'}, JSON.stringify({name: 'dependency', version:'0.0.1', description:'sample module', repository:{}}));
+
+      var packageJson = {name: 'dependency', version:'0.0.1', description:'sample module', repository:{}};
+      pack.entry({name: 'dependency/package.json'}, JSON.stringify(packageJson));
       pack.entry({name: 'dependency/index.js'}, "module.exports={}");
       pack.entry({name: 'depencency/README.md'}, "##README");
       pack.finalize();
@@ -81,7 +88,7 @@ describe('create app', function() {
     });
 
     mockServer.listen(9999, function() {
-      uiHelper.progress("Mock server listening on port 9999");
+      log.info("Mock server listening on port 9999");
       done();
     });
   });

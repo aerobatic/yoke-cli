@@ -11,20 +11,16 @@ module.exports = function( grunt ) {
     },
 
     mochaTest: {
-      options: {
-        // ui: "bdd",
-        // reporter: "spec",
-        require: "test/before.js"
-      },
+      options: {},
       all: "test/commands/*.js"
     }
-
   });
 
   grunt.loadNpmTasks("grunt-contrib-jshint");
   grunt.loadNpmTasks("grunt-mocha-test");
   grunt.loadNpmTasks("grunt-release");
 
-  grunt.registerTask("default", [ "jshint", "mochaTest" ]);
+  grunt.registerTask("test", ["mochaTest"]);
+  grunt.registerTask("default", [ "jshint", "test" ]);
 
 };
