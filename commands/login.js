@@ -3,7 +3,7 @@ var inquirer = require('inquirer'),
   fs = require('fs'),
   path = require('path'),
   osenv = require('osenv'),
-  uiHelper = require('../lib/uiHelper');
+  log = require('../lib/log');
 
 module.exports = function(program, done) {
   var questions = [
@@ -37,8 +37,8 @@ module.exports = function(program, done) {
     // Write the values to the .aerobatic file
     var file = path.join(osenv.home(), '.aerobatic');
     
-    uiHelper.progress("Writing userId and secretKey to file: " + file);
-    uiHelper.progress("You can now make API calls from the yoke CLI");
+    log.progress("Writing userId and secretKey to file: " + file);
+    log.progress("You can now make API calls from the yoke CLI");
 
     fs.writeFile(file, JSON.stringify(answers), done);
   });

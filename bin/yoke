@@ -7,7 +7,10 @@ var osenv = require('osenv');
 var path = require('path');
 var fs = require('fs');
 var _ = require('lodash');
-var uiHelper = require('../lib/uiHelper');
+var async = require('async');
+var log = require('../lib/log');
+
+require('simple-errors');
 
 program.version(require('../package.json').version)
   .option('-d, --debug', 'Emit debug messages')
@@ -15,54 +18,26 @@ program.version(require('../package.json').version)
   .option('-k, --secretKey', 'User secret key')
   .option('--dev', 'Run yoke against the developement environment')
 
-function commandAction(name, requireLogin) {
-  return function() {
-    setProgramDefaults();
-
-    // If login is required to run this command and the user and key were 
-    // not passed in as arguments, then look up the .aerobatic file.
-    if (requireLogin === true && !(program.user && program.key)) {
-      var err = loadCredentials();
-      if (err) {
-        uiHelper.error(err);
-        process.exit();
-      }
-    }
-
-    require('../commands/' + name)(program, function(err) {
-      if (err)
-        uiHelper.error(err);
-
-      process.exit();
-    });
-  };
-}
-
 program 
   .command('login')
   .description("Write the login credentials")
-  .action(commandAction('login'));
+  .action(commandAction('login', {requireCredentials: false, loadNpmConfig: false}));
 
 program 
   .command('app:create')
   .description('Create a new Aerobatic app')
-  .action(commandAction('appCreate', true));
+  .action(commandAction('appCreate', {loadNpmConfig:false}));
 
 program
-  .option('-w, --watch', 'Watch for code changes')
   .command('sim')
-  .description('Run the local simulator server')
-  .action(function() {
-    console.log("Watch for changes: ", program.watch);
-    // Run the watch task
-    // buildTool('watch');
+  .description("Run the simulator server")
+  .action(commandAction('server', {simulator: true}));
 
-    // Figure out which tasks to run ahead of the simulator
-    // Run the watch task
-    // Start the simulator server
-    process.exit();
-  });
-
+program
+  .option('-o, --open', 'Open a browser to the local server')
+  .command('serve')
+  .description("Run a localhost instance of the app")
+  .action(commandAction('serve'));
 
 program
   .option('-m, --message', 'Version message')
@@ -89,34 +64,113 @@ program
 
 program.parse(process.argv);
 
+function commandAction(name, options) {
+  // Extend any options from program to options.
+  return function() {
+    _.extend(program, _.defaults(options || {}, {
+      requireCredentials: true,
+      loadNpmConfig: true  
+    }));
+
+    var initTasks = {};
+
+    // If login is required to run this command and the user and key were 
+    // not passed in as arguments, then look up the .aerobatic file.
+    if (program.requireCredentials === true && !(program.user && program.key)) {
+      initTasks.credentials = loadCredentials;
+    }
+
+    if (program.loadNpmConfig) {
+      initTasks.config = loadAerobaticNpmConfig;
+    }
+
+    async.parallel(initTasks, function(err, results) {
+      if (err) {
+        log.error(err.stack || err.toString());
+        process.exit();
+      }
+
+      // Extend program with the values.
+      _.each(results, function(value, key) {
+        _.extend(program, value);
+      });
+
+      setProgramDefaults();
+
+      require('../commands/' + name)(program, function(err) {
+        if (err)
+          log.error(err.stack || err.toString());
+
+        process.exit();
+      });
+    });
+  };
+}
+
 function setProgramDefaults() {
+  // Default the base directories to the current directory
+  if (!program.baseDirs) {
+    program.baseDirs = {
+      debug: process.cwd(),
+      release: process.cwd()
+    };
+  }
+
   if (program.debug)
     process.env.YOKE_DEBUG = '1';
   if (program.dev)
     process.env.AEROBATIC_ENV = 'dev';
 }
 
-function loadCredentials() {
+function loadCredentials(callback) {
   var aerobaticDotFile = path.join(osenv.home(), '.aerobatic');
-  uiHelper.debug("Loading credentials from %s", aerobaticDotFile);
+  log.debug("Loading credentials from %s", aerobaticDotFile);
 
   // TODO: Check that .aerobatic file doesn't have overly permissive access similar to how openSSH does.
-  if (!fs.existsSync(aerobaticDotFile)) {
-    uiHelper.error("No .aerobatic file exists. First run 'yoke login'");
-    process.exit();
-  }
+  fs.exists(aerobaticDotFile, function(exists) {
+    if (!exists)
+      return callback(Error.create("No .aerobatic file exists. First run 'yoke login'"));
 
-  var credentials;
-  try {
-    credentials = JSON.parse(fs.readFileSync(aerobaticDotFile));
-  }
-  catch (e) {
-    return "Could not parse .aerobatic file JSON. Try re-running 'yoke login'";
-  }
+    var credentials;
+    try {
+      credentials = JSON.parse(fs.readFileSync(aerobaticDotFile));
+    }
+    catch (e) {
+      return callback(Error.create("Could not parse .aerobatic file JSON. Try re-running 'yoke login'"));
+    }
   
-  if (_.isEmpty(credentials.userId) || _.isEmpty(credentials.secretKey))
-    return "Missing information in .aerobatic file. Try re-running 'yoke login'";
+    if (_.isEmpty(credentials.userId) || _.isEmpty(credentials.secretKey))
+      return callback(Error.create("Missing information in .aerobatic file. Try re-running 'yoke login'"));
 
-  uiHelper.debug("Credentials loaded, userId=%s", credentials.userId);
-  _.extend(program, credentials);
+    log.debug("Credentials loaded, userId=%s", credentials.userId);
+    callback(null, credentials);
+  });
+}
+
+function loadAerobaticNpmConfig(callback) {
+  var packageJsonPath = path.join(process.cwd(), 'package.json');
+
+  fs.exists(packageJsonPath, function(exists) {
+    if (!exists)
+      return callback(new Error("File " + packageJsonPath + " does not exist"));
+
+    fs.readFile(packageJsonPath, function(err, contents) {
+      if (err) return callback(err);
+
+      var json;
+      try {
+        json = JSON.parse(contents);
+      }
+      catch (e) {
+        return callback(Error.create("File " + packageJsonPath + " is not valid JSON"));
+      }
+
+      if (!json._aerobatic)
+        return callback(Error.create("Missing _aerobatic section in package.json file. Try re-running the command 'yoke app:init'."));
+      if (!json._aerobatic.appId)
+        return callback(Error.create("Missing appId in _aerobatic section of package.json. Try re-running the command 'yoke app:init'."))
+
+      callback(null, json._aerobatic);
+    });
+  });
 }

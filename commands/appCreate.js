@@ -8,7 +8,7 @@ var fs = require('fs');
 var path = require('path');
 var spawn = require('../lib/spawn');
 var api = require('../lib/api');
-var uiHelper = require('../lib/uiHelper');
+var log = require('../lib/log');
 
 require("simple-errors");
 
@@ -24,7 +24,7 @@ module.exports = function(program, done) {
     if (err) return done(err);
 
     // Print a blank line at the end of the questionaire
-    uiHelper.blankLine();
+    log.blankLine();
 
     if (answers.confirmExistingDir === false)
       return done("Please re-run 'yoke app:create' from the root of the directory where your existing app code resides.")
@@ -34,14 +34,14 @@ module.exports = function(program, done) {
       // Create a new directory corresponding to the app name
       appDir = path.join(program.baseDir, answers.appName);
       tasks.push(function(cb) {
-        uiHelper.progress("Making app directory %s", appDir);
+        log.info("Making app directory %s", appDir);
         fs.mkdir(appDir, cb);
       });  
     }
     else
       appDir = program.baseDir;
 
-    uiHelper.debug("Setting appDir to %s", appDir);
+    log.debug("Setting appDir to %s", appDir);
 
     if (answers.template) {
       tasks.push(function(cb) {
@@ -52,9 +52,9 @@ module.exports = function(program, done) {
         npmInstall(appDir, cb);
       });
 
-      // tasks.push(function(cb) {
-      //   bowerInstall(appDir, cb);
-      // });
+      tasks.push(function(cb) {
+        bowerInstall(appDir, cb);
+      });
     }
 
     var createdApp = null;
@@ -75,7 +75,7 @@ module.exports = function(program, done) {
     async.series(tasks, function(err) {
       if (err) return done(err);
 
-      uiHelper.success("App %s has been created", answers.appName);
+      log.success("App %s has been created", answers.appName);
       done(null, createdApp);
     });
   });
@@ -96,7 +96,7 @@ module.exports = function(program, done) {
 
   function getTemplateMetadata(callback) {
     // Load the templates from the GitHub content repo
-    uiHelper.debug("Fetching templatesMetadata from %s", program.templatesUrl);
+    log.debug("Fetching templatesMetadata from %s", program.templatesUrl);
     request(program.templatesUrl, function(err, resp, body) {
       if (err) return callback(err);
 
@@ -106,7 +106,7 @@ module.exports = function(program, done) {
 
   function loadOrganizations(callback) {
     // Get the user's organizations
-    uiHelper.debug("Fetching organizations");
+    log.debug("Fetching organizations");
     api(program, {method: 'GET', path: '/api/profile/orgs'}, function(err, orgs) {
       if (err) return callback(err);
       callback(null, orgs);
@@ -159,19 +159,21 @@ module.exports = function(program, done) {
       validate: function(input) {
         var done = this.async();
     
-        setTimeout(function() {
-          if (!/^[a-z0-9-_]+$/.test(input))
-            return done("Name may only contain letters, numbers, dashes, and underscores");
+        if (!/^[a-z0-9-_]+$/.test(input))
+          return done("Name may only contain letters, numbers, dashes, and underscores");
 
-          // TODO: Call API to validate app name is available
-          appNameExists(input, function(err, exists) {
-            if (err) return done(err);
-            if (exists)
-              done("App name " + input + " is already taken");
-            else
-              done(true);
-          });
-        }, 0);        
+        // TODO: Call API to validate app name is available
+        appNameExists(input, function(err, exists) {
+          if (err) {
+            log.error(err);
+            return done(err);
+          }
+
+          if (exists)
+            done("App name " + input + " is not available.");
+          else
+            done(true);
+        });
       },
       when: function(answers) {
         return answers.confirmExistingDir !== false;
@@ -221,11 +223,11 @@ module.exports = function(program, done) {
   function npmInstall(appDir, callback) {
     fs.exists(path.join(appDir, 'package.json'), function(exists) {
       if (!exists) {
-        uiHelper.debug("No package.json file exists in app directory");
+        log.debug("No package.json file exists in app directory");
         return callback();
       }
 
-      uiHelper.progress("Installing npm dependencies");
+      log.info("Installing npm dependencies");
       spawn('npm', ['install'], appDir, callback);
     });
   }
@@ -233,11 +235,11 @@ module.exports = function(program, done) {
   function bowerInstall(appDir, callback) {
     fs.exists(path.join(appDir, 'bower.json'), function(exists) {
       if (!exists) {
-        uiHelper.debug("No bower.json file exists in app directory");
+        log.debug("No bower.json file exists in app directory");
         return callback();
       }
 
-      uiHelper.progress("Installing bower dependencies");
+      log.info("Installing bower dependencies");
       spawn('bower', ['install'], appDir, callback);
     });
   }
@@ -247,7 +249,7 @@ module.exports = function(program, done) {
 
     // Download, unzip, and extract the template from GitHub repo.
     var archiveUrl = program.gitHubUrl + '/' + template.gitHubRepo + '/archive/' + branch + '.tar.gz';
-    uiHelper.progress("Unpacking template %s to %s", archiveUrl, appDir);
+    log.info("Unpacking template %s to %s", archiveUrl, appDir);
 
     request(archiveUrl)
       .pipe(zlib.createGunzip())
@@ -269,11 +271,11 @@ module.exports = function(program, done) {
       }
     };
 
-    uiHelper.progress("Invoking Aerobatic API to create app");
+    log.info("Invoking Aerobatic API to create app");
     var request = api(program, options, function(err, app) {
       if (err) return callback(Error.create("Error invoking Aerobatic API to create the app", {}, err));
 
-      uiHelper.success("App created at %s", app.url);
+      log.success("App created at %s", app.url);
       callback(null, app);
     });
   }
@@ -283,7 +285,7 @@ module.exports = function(program, done) {
     var packageJsonPath = path.join(appDir, 'package.json');
     fs.exists(packageJsonPath, function(exists) {
       if (!exists) {
-        uiHelper.progress("Writing file %s", packageJsonPath);
+        log.info("Writing file %s", packageJsonPath);
         fs.writeFile(packageJsonPath, JSON.stringify({
           name: app.name,
           version: "0.0.0",
@@ -293,8 +295,8 @@ module.exports = function(program, done) {
         }, null, 2), callback);
       }
       else {
-        // If the package.json file already exits, modify it by adding a
-        uiHelper.progress("Updating file %s", packageJsonPath);
+        // If the package.json file already exits, modify it by adding an _aerobatic section
+        log.info("Updating file %s", packageJsonPath);
         fs.readFile(packageJsonPath, function(err, json) {
           if (err) return callback(err);
 
@@ -320,9 +322,7 @@ module.exports = function(program, done) {
       path: '/api/apps/' + appName
     };
 
-    // uiHelper.progress("Checking if appName %s is available", appName);
     api(program, options, function(err, body, statusCode) {
-      uiHelper.debug("Done checking for app name availability");
       if (err) return callback(err);
 
       return callback(null, statusCode === 200);
