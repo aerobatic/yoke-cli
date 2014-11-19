@@ -18,13 +18,10 @@ var chalk = require('chalk');
 var bodyParser = require('body-parser');
 var api = require('../lib/api');
 var indexPage = require('../lib/indexPage');
+var Gaze = require('gaze').Gaze;
 
 module.exports = function(program, done) {
-  var error = setDefaults(program);
-  if (error instanceof Error)
-    return done(error);
-
-  var aerobaticApp, watcher, localhostServer, liveReloadServer, watchedFiles = [];
+  var aerobaticApp, watcher, localhostServer, liveReloadServer, watchedFiles = [], simulatorUrl;
 
   var asyncTasks = [];
   asyncTasks.push(function(cb) {
@@ -33,32 +30,43 @@ module.exports = function(program, done) {
     api(program, {method: 'GET', path: '/api/apps/' + program.appId}, function(err, app) {
       if (err) return cb(err);
 
-      // Store the aerobaticApp on the program.
+      // Apps with oauth enabled need to be run in simulator mode.
+      if (app.authConfig && app.authConfig.type === 'oauth' && program.simulator === false) {
+        return cb(new Error("This app has OAuth enabled. Development of this app should happen in simulator mode. Try running 'yoke sim' instead."))
+      }
+      
       aerobaticApp = app;     
       cb();
     });
   });
 
-  if (program.livereload) {
-    watcher = watch([program.indexPage]);
-    watcher.on('change', onFileChanged);
+  asyncTasks.push(setDefaults);
 
-    if (_.isEmpty(program.watch) === false) {
-      // Kick off the watch task for the build tool
-      asyncTasks.push(function(cb) {
-        buildTool(program.watch, {cwd: program.cwd, normalizeStdio: true}, cb);
-      });
-    }
+  if (program.simulator === true) {
+    // If this is simulator mode, upload the index pages to the simulator host.
+    asyncTasks.push(function(cb) {
+      uploadIndexPageToSimulator([program.indexPage, program.loginPage], cb);
+    });
   }
+      
+  asyncTasks.push(function(cb) {
+    if (_.isEmpty(program.watch) === false)
+      buildTool(program.watch, {cwd: program.cwd, normalizeStdio: true}, cb);
+    else
+      cb();
+  });
 
   asyncTasks.push(function(cb) {
     // Start the localhost server
-    startLocalServer(function(url) {
-      log.info("App running at %s", url);
+    startLocalServer(function(localhostUrl) {
+      log.info("App running at %s", localhostUrl);
+
+      if (program.simulator === true)
+        simulatorUrl = buildSimulatorUrl();
 
       // Open a browser tab with the localhost URL
       if (program.open)
-        openBrowser(url);
+        openBrowser(simulatorUrl || localhostUrl);
 
       cb();
     });
@@ -68,7 +76,32 @@ module.exports = function(program, done) {
     if (err)
       return done(err);
 
+    if (program.livereload) {
+      log.debug("Starting watcher for file changes");
+
+      var indexPages = _.compact([program.indexPage, program.loginPage]); 
+
+      log.info("Watching pages %s", JSON.stringify(indexPages));
+      watcher = new Gaze(indexPages);
+
+      watcher.on('error', function(err) {
+        log.warn("Watch error %s", err.message);
+      });
+
+      watcher.on('ready', function(watcher) { 
+        watcher.on('changed', onFileChanged);
+        waitForExit();
+      });
+    }
+    else
+      waitForExit();
+  });
+
+  function waitForExit() {
     done(null, function() {
+      if (watcher)
+        watcher.close();
+
       if (localhostServer) {
         log.debug("Closing localhost server");
         localhostServer.close();
@@ -78,25 +111,58 @@ module.exports = function(program, done) {
         liveReloadServer.close();
       }
     });
-  });
+  }
 
-  function onFileChanged(watchEvent) {
-    log.debug("Change to %s detected", watchEvent.path);
+  function onFileChanged(filePath) {
+    log.debug("Change to %s detected", filePath);
 
-    var assetUrlPath;
-    // TODO: If the changed file is index.html and we are in simulator mode, re-upload it
-    if (watchEvent.path === program.indexPage)
-      assetUrlPath = '/';
-    else if (_.contains(watchedFiles, watchEvent.path))
-      assetUrlPath = path.relative(program.baseDir, watchEvent.path);
+    if (program.simulator === true && (filePath === program.indexPage || filePath === program.loginPage)) {
+      // Upload the modified index.html to the simulator
+      uploadIndexPageToSimulator(filePath, function(err) {
+        if (err) return done(err);
 
-    if (assetUrlPath) {
-      //TODO: What if several files all changed at once.. We should buffer 
-      //them up and send just one notificatio to livereload.
-      program.lastFileChanges = [watchEvent.path];
-      log.info("Livereload triggered by change to %s", assetUrlPath);
-      tinylr.changed(assetUrlPath);
+        program.lastFileChanges = [filePath];
+        tinylr.changed('/');
+      });
     }
+    else {
+      var assetUrlPath;
+      if (filePath === program.indexPage)
+        assetUrlPath = '/';
+      else if (_.contains(watchedFiles, filePath))
+        assetUrlPath = path.relative(program.baseDir, filePath);
+
+      if (assetUrlPath) {
+        //TODO: What if several files all changed at once.. We should buffer 
+        //them up and send just one notification to livereload.
+        program.lastFileChanges = [filePath];
+        log.info("Livereload triggered by change to %s", filePath);
+        tinylr.changed(assetUrlPath);
+      }  
+    }    
+  }
+
+  function uploadIndexPageToSimulator(indexPage, callback) {
+    var requestOptions = {
+      method: 'POST',
+      path: '/dev/' + program.appId + '/simulator',
+      form: {}
+    };
+
+    if (_.isString(indexPage))
+      indexPage = [indexPage];
+    indexPage = _.compact(indexPage);
+
+    // Attach the files as multi-part
+    var request = api(program, requestOptions, callback);
+    var form = request.form();
+
+    log.info("Uploading index pages %s to simulator", indexPage);
+
+    //  TODO: If the page is a .haml or .jade file, compile to html first.
+    _.each(indexPage, function(pagePath) {
+      form.append(path.basename(pagePath, '.html'), fs.createReadStream(pagePath));      
+    });
   }
 
   function startLocalServer(callback) {
@@ -116,22 +182,6 @@ module.exports = function(program, done) {
     }
 
     localhost.use(function(req, res, next) {
-      // Make sure the path is in the list of files to watch.
-      if (program.livereload) {
-        // Watch any file that is requested by the page.
-        var assetPath;
-        if (req.path === '/')
-          assetPath = program.indexPage;
-        else
-          assetPath = path.join(program.baseDir, req.path);
-
-        if (_.contains(watchedFiles, assetPath) === false) {
-          log.debug("Watching file %s for changes", assetPath);
-          watcher.add(assetPath);
-          watchedFiles.push(assetPath);
-        } 
-      }
-
       onFinished(res, function() {
         // Write each request to the log in a format that emulates NPM
         log.writeln({
@@ -142,12 +192,36 @@ module.exports = function(program, done) {
         });
       });
 
-      next();
+      // Make sure the path is in the list of files to watch.
+      if (program.livereload) {
+        // Watch any file that is requested by the page.
+        var assetPath;
+        if (req.path === '/')
+          assetPath = program.indexPage;
+        else
+          assetPath = path.join(program.baseDir, req.path);
+
+        if (_.contains(watchedFiles, assetPath) === false) {
+          watcher.add([assetPath], function() {
+            log.debug("Added watch to file %s", assetPath);  
+            watchedFiles.push(assetPath);
+            next();
+          });
+        } 
+        else
+          next();
+      }
+      else
+        next();
     });
 
     localhost.get('/', function(req, res, next) {
-      // TODO: Look for the best index page. If it's .jade or .haml compile them on the fly
-      indexPage(program.indexPage, aerobaticApp, program, function(err, html) {
+      // Redirect the index page in simulator mode to the simulator host.
+      if (program.simulator === true)
+        return res.redirect(simulatorUrl);
+
+      // TODO: If it's .jade or .haml compile them on the fly
+      indexPage(program.indexPage, aerobaticApp, program, function(err, html) {        
         if (err) return next(err);
 
         res.set('Content-Type', 'text/html');
@@ -196,7 +270,7 @@ module.exports = function(program, done) {
     }
   }
 
-  function setDefaults() {
+  function setDefaults(callback) {
     _.defaults(program, {
       port: 3000,
       build: 'debug',
@@ -211,7 +285,7 @@ module.exports = function(program, done) {
 
     // Verify that the build type is valid.
     if (_.contains(['debug', 'release'], program.build) === false) {
-      return new Error("Invalid build option value. Valid values are 'debug' and 'release'");
+      return callback(new Error("Invalid build option value. Valid values are 'debug' and 'release'."));
     }
 
     // If an explicit baseDir was specified for the current build type, ensure it exists.
@@ -219,9 +293,9 @@ module.exports = function(program, done) {
       var dir = path.join(program.cwd, program.baseDirs[program.build]);
 
       if (!fs.existsSync(dir)) {
-        return new Error(util.format("The %s directory %s specified in package.json does not exist.", 
+        return callback(new Error(util.format("The %s directory %s specified in package.json does not exist.", 
           program.build, 
-          program.baseDirs[program.build]));
+          program.baseDirs[program.build])));
       }
       program.baseDir = dir;
     } 
@@ -240,9 +314,24 @@ module.exports = function(program, done) {
     var indexPageNames = ['index.html', 'index.haml', 'index.jade'];
     program.indexPage = takeFirstExisting(program.baseDir, indexPageNames);
     if (!program.indexPage) {
-      return new Error(util.format("Could not find any of the following pages in %s: %s", 
-        JSON.stringify(indexPageNames), program.baseDir));
+      return callback(new Error(util.format("Could not find any of the following pages in %s: %s", 
+        JSON.stringify(indexPageNames), program.baseDir)));
     }
+    else
+      log.debug("Using index page %s", program.indexPage);
+
+    var loginPageNames = ['login.html', 'login.haml', 'login.jade'];
+    if (aerobaticApp.authConfig && aerobaticApp.authConfig.type === 'oauth') {
+      program.loginPage = takeFirstExisting(program.baseDir, loginPageNames);
+      if (!program.loginPage) {
+        return callback(new Error(util.format("Apps with oauth enabled require a login page. None of the following pages exist in %s: %s", 
+          JSON.stringify(loginPageNames), program.baseDir)));
+      }
+      else
+        log.debug("Using login page %s", program.loginPage);
+    }
+
+    callback();
   }
 
   // Return the first file or directory that exists.
@@ -254,5 +343,17 @@ module.exports = function(program, done) {
     }
     // If none of the candidate dirs exist, use the current directory.
     return fallback;
+  }
+
+  // Build the URL to the simulator host
+  function buildSimulatorUrl() {
+    var url = aerobaticApp.url + '?sim=1&port=' + program.port + '&user=' + program.userId;
+    if (program.livereload === true)
+      url += '&reload=1&lrport=' + program.livereloadPort;
+
+    if (program.build === 'release')
+      url += '&release=1';
+
+    return url;
   }
 };

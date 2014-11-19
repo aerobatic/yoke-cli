@@ -17,6 +17,7 @@ program.version(require('../package.json').version)
   .option('-u, --userId', 'User id. If not provided the credentials in the .aerobatic file are used')
   .option('-k, --secretKey', 'User secret key')
   .option('--dev', 'Run yoke against the developement environment')
+  .option('--offline', 'Indicate that your are offline')
 
 program 
   .command('login')
@@ -29,15 +30,16 @@ program
   .action(commandAction('appCreate', {loadNpmConfig:false}));
 
 program
-  .command('sim')
-  .description("Run the simulator server")
-  .action(commandAction('server', {simulator: true}));
-
-program
   .option('-o, --open', 'Open a browser to the local server')
   .command('serve')
   .description("Run a localhost instance of the app")
   .action(commandAction('serve'));
+
+program
+  // .option('-o, --open', 'Open a browser to the simulator host')
+  .command('sim')
+  .description("Run the simulator server")
+  .action(commandAction('serve', {simulator: true}));
 
 program
   .option('-m, --message', 'Version message')
@@ -46,21 +48,6 @@ program
   .action(function() {
     // Read the files to deploy from the package.json 
   });
-
-
-// program
-//   .command('build')
-//   .description('Run a local simulator asset server')
-//   .action(function(){
-//     // Look to see if there is a Gruntfile.js in the current directory
-
-//     // Programmatically run grunt
-//     var gruntCli = require('grunt').cli;
-//     gruntCli.tasks = ['build'];
-//     gruntCli({}, function() {
-//       console.log("Done running the grunt build task");
-//     });
-//   });
 
 program.parse(process.argv);
 

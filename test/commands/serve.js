@@ -3,7 +3,7 @@ var assert = require('assert');
 var rimraf = require('rimraf');
 var request = require('request');
 var fs = require('fs');
-var touch = require("touch");
+var sinon = require('sinon');
 var path = require('path');
 var express = require('express');
 var shortid = require('shortid');
@@ -20,10 +20,17 @@ describe('serve command', function() {
     // Create a mock API server
     var mockServer = express();
 
+    var self = this;
     mockServer.get('/api/apps/:appId', function(req, res) {
-      res.json({
-        appId: req.params.appId
-      });
+      res.json(self.app);
+    });
+
+    this.mockSimulator = sinon.spy(function(req, res) {
+      res.json({});
+    });
+
+    mockServer.post('/dev/:appId/simulator', function(req, res) {
+      self.mockSimulator(req, res);
     });
 
     mockServer.listen(9999, function() {
@@ -35,16 +42,32 @@ describe('serve command', function() {
   beforeEach(function() {
     this.tmp = path.join(__dirname, '../../tmp');
 
-    // Delete and re-create the tmp directory
-    rimraf.sync(this.tmp);
+    this.mockSimulator.reset();
+
+    // Recreate the tmp directory
     fs.mkdirSync(this.tmp);
+
+    this.app = {
+      appId: shortid.generate()
+    };
 
     this.program = {
       cwd: this.tmp,
-      appId: shortid.generate(),
+      appId: this.app.appId,
       apiUrl: "http://localhost:9999",
       port: 4000
     };
+
+    this.endHandle = null;
+  });
+
+  afterEach(function(done) {
+    if (this.endHandle)
+      this.endHandle();
+
+    rimraf(this.tmp, function(err) {
+      done();
+    });    
   });
 
   it('returns error when no index page exists', function(done) {
@@ -61,11 +84,11 @@ describe('serve command', function() {
     fs.writeFileSync(path.join(this.program.cwd, 'src', 'index.html'), '<html><head></head><body></body></html>');
 
     serve(this.program, function(err, end) {
+      self.endHandle = end;      
       if (err) return done(err);
+      
 
       assert.equal(self.program.baseDir, path.join(self.tmp, 'src'));
-
-      end();
       done();
     });
   });
@@ -85,7 +108,9 @@ describe('serve command', function() {
   });
 
   it('returns error if no index page found', function(done) {
-    serve(this.program, function(err) {
+    serve(this.program, function(err, end) {
+      this.endHandle = end;
+
       assert.isDefined(err);
       assert.isTrue(/Could not find any of the following pages/.test(err.message));
       done();
@@ -107,6 +132,7 @@ describe('serve command', function() {
     fs.writeFileSync(indexPage, '<html><head></head><body></body></html>');
 
     serve(this.program, function(err, end) {
+      self.endHandle = end;
       if (err) return done(err);
 
       // Make a request to the index page to load up all the pages to watch
@@ -114,14 +140,14 @@ describe('serve command', function() {
         if (err) return done(err);
 
         assert.isTrue(/\<html\>/.test(body));
-        // touch.sync(path.join(self.tmp, 'index.html'), {force: true});
+
+        log.debug("Making change to %s", indexPage);
         fs.writeFileSync(indexPage, '<html><head></head><body>FOO</body></html>');
         setTimeout(function() {
           assert.deepEqual(self.program.lastFileChanges, [indexPage]);
 
-          end();
           done();
-        }, 300);  
+        }, 250);  
       });
     });
   });
@@ -134,20 +160,47 @@ describe('serve command', function() {
     fs.writeFileSync(scriptFile, 'function(){}');
 
     serve(this.program, function(err, end) {
+      self.endHandle = end;
       if (err) return done(err);
 
       // Make a request to the index page to load up all the pages to watch
       request('http://localhost:' + self.program.port + '/script.js', function(err, resp, body) {
         if (err) return done(err);
 
-        assert.isTrue(/function\(\)/.test(body));        
+        assert.isTrue(/function\(\)/.test(body));      
+        log.info("Making change to file %s", scriptFile);
         fs.writeFileSync(scriptFile, 'function(){console.log("boo");}');
         setTimeout(function() {
           assert.deepEqual(self.program.lastFileChanges, [scriptFile]);
 
-          end();
           done();
-        }, 300);  
+        }, 250);
+      });
+    });
+  });
+
+  describe('simulator mode', function() {
+    it('uploads index document to simulator host', function(done) {
+      var self = this;
+      this.program.simulator = true;
+
+      var indexPage = path.join(this.tmp, 'index.html');
+      fs.writeFileSync(indexPage, '<html />');
+      serve(this.program, function(err, end) {
+        self.endHandler = end;
+        if (err) return done(err);
+
+        assert.isTrue(self.mockSimulator.called);
+        self.mockSimulator.reset();
+
+        // Now change the index file and verify it is uploaded again.
+        log.debug("Changing index page %s", indexPage);
+        fs.writeFileSync(indexPage, '<html><head></head></html>');
+        setTimeout(function() {
+          assert.isTrue(self.mockSimulator.called);
+
+          done();
+        }, 500);
       });
     });
   });
