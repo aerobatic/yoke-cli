@@ -48,21 +48,26 @@ program
   });
 
 
-program
-  .command('build')
-  .description('Run a local simulator asset server')
-  .action(function(){
-    // Look to see if there is a Gruntfile.js in the current directory
+// program
+//   .command('build')
+//   .description('Run a local simulator asset server')
+//   .action(function(){
+//     // Look to see if there is a Gruntfile.js in the current directory
 
-    // Programmatically run grunt
-    var gruntCli = require('grunt').cli;
-    gruntCli.tasks = ['build'];
-    gruntCli({}, function() {
-      console.log("Done running the grunt build task");
-    });
-  });
+//     // Programmatically run grunt
+//     var gruntCli = require('grunt').cli;
+//     gruntCli.tasks = ['build'];
+//     gruntCli({}, function() {
+//       console.log("Done running the grunt build task");
+//     });
+//   });
 
 program.parse(process.argv);
+
+process.on('exit', function(code) {
+
+  log.info("Exiting");
+});
 
 function commandAction(name, options) {
   // Extend any options from program to options.
@@ -97,11 +102,22 @@ function commandAction(name, options) {
 
       setProgramDefaults();
 
-      require('../commands/' + name)(program, function(err) {
-        if (err)
+      require('../commands/' + name)(program, function(err, onKill) {
+        if (err) {
           log.error(err.stack || err.toString());
+          process.exit();
+        }
 
-        process.exit();
+        // Don't shutdown the process if keepAlive is specified.
+        //TODO: Could we print a message in the bottom bar with a message for how to stop?
+        if (!_.isFunction(onKill))
+          process.exit();
+        else {
+          // Wait for SIGINT to cleanup the command
+          process.on('exit', function() {
+            onKill();
+          });
+        }
       });
     });
   };
@@ -109,13 +125,6 @@ function commandAction(name, options) {
 
 function setProgramDefaults() {
   // Default the base directories to the current directory
-  if (!program.baseDirs) {
-    program.baseDirs = {
-      debug: process.cwd(),
-      release: process.cwd()
-    };
-  }
-
   if (program.debug)
     process.env.YOKE_DEBUG = '1';
   if (program.dev)
