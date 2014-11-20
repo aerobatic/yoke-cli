@@ -11,7 +11,6 @@ var openBrowser = require('open');
 var path = require('path');
 var fs = require('fs');
 var tinylr = require('tiny-lr');
-var watch = require('glob-watcher');
 var urlParse = require('url').parse;
 var onFinished = require('on-finished');
 var chalk = require('chalk');
@@ -82,15 +81,13 @@ module.exports = function(program, done) {
       var indexPages = _.compact([program.indexPage, program.loginPage]); 
 
       log.info("Watching pages %s", JSON.stringify(indexPages));
-      watcher = new Gaze(indexPages);
-
-      watcher.on('error', function(err) {
-        log.warn("Watch error %s", err.message);
+      watcher = new Gaze(indexPages, {maxListeners: 100}, function() {
+        waitForExit();
       });
 
-      watcher.on('ready', function(watcher) { 
-        watcher.on('changed', onFileChanged);
-        waitForExit();
+      watcher.on('changed', onFileChanged);
+      watcher.on('error', function(err) {
+        log.warn("Watch error %s", err.message);
       });
     }
     else
