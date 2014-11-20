@@ -9,6 +9,7 @@ var path = require('path');
 var spawn = require('../lib/spawn');
 var api = require('../lib/api');
 var log = require('../lib/log');
+var npmConfig = require('../lib/npmConfig');
 
 require("simple-errors");
 
@@ -70,7 +71,7 @@ module.exports = function(program, done) {
 
     // Update the package.json
     tasks.push(function(cb) {
-      updatePackageJson(appDir, createdApp, cb);
+      npmConfig(appDir, createdApp, cb);
     });
 
     async.series(tasks, function(err) {
@@ -278,41 +279,6 @@ module.exports = function(program, done) {
 
       log.success("App created at %s", app.url);
       callback(null, app);
-    });
-  }
-
-  function updatePackageJson(appDir, app, callback) {
-    // If there isn't a package.json file, create one. Otherwise modify it adding the aerobatic section.
-    var packageJsonPath = path.join(appDir, 'package.json');
-    fs.exists(packageJsonPath, function(exists) {
-      if (!exists) {
-        log.info("Writing file %s", packageJsonPath);
-        fs.writeFile(packageJsonPath, JSON.stringify({
-          name: app.name,
-          version: "0.0.0",
-          _aerobatic: {
-            appId: app.appId
-          }
-        }, null, 2), callback);
-      }
-      else {
-        // If the package.json file already exits, modify it by adding an _aerobatic section
-        log.info("Updating file %s", packageJsonPath);
-        fs.readFile(packageJsonPath, function(err, json) {
-          if (err) return callback(err);
-
-          var packageJson;
-          try {
-            packageJson = JSON.parse(json);
-          }
-          catch (e) {
-            return callback(Error.create("package.json is invalid"));
-          }
-
-          packageJson['_aerobatic'] = {appId: app.appId};
-          fs.writeFile(packageJsonPath, JSON.stringify(packageJson, null, 2), callback);
-        });
-      }
     });
   }
 

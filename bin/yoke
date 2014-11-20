@@ -29,6 +29,11 @@ program
   .description('Create a new Aerobatic app')
   .action(commandAction('appCreate', {loadNpmConfig:false}));
 
+program 
+  .command('app:init')
+  .description('Initialize the current directory with an existing Aerobatic app')
+  .action(commandAction('appInit', {loadNpmConfig:false}));
+
 program
   .option('-o, --open', 'Open a browser to the local server')
   .command('serve')
@@ -47,6 +52,13 @@ program
   .description('Deploy a new version of the app')
   .action(function() {
     // Read the files to deploy from the package.json 
+  });
+
+program
+  .command('*')
+  .action(function(env){
+    log.error("Not a valid command. Type 'yoke -h' for help.")
+    process.exit();
   });
 
 program.parse(process.argv);
@@ -78,7 +90,9 @@ function commandAction(name, options) {
 
     async.parallel(initTasks, function(err, results) {
       if (err) {
-        log.error(err.stack || err.toString());
+        if (err instanceof Error)
+          log.error(err.stack || err.toString());
+
         process.exit();
       }
 
