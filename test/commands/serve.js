@@ -39,13 +39,11 @@ describe('serve command', function() {
     });
   });
 
-  beforeEach(function() {
+  beforeEach(function(done) {
+    var self = this;
     this.tmp = path.join(__dirname, '../../tmp');
 
     this.mockSimulator.reset();
-
-    // Recreate the tmp directory
-    fs.mkdirSync(this.tmp);
 
     this.app = {
       appId: shortid.generate()
@@ -59,6 +57,13 @@ describe('serve command', function() {
     };
 
     this.endHandle = null;
+
+    rimraf(this.tmp, function(err) {
+      // Recreate the tmp directory
+      fs.mkdir(self.tmp, function(){
+        done();
+      });
+    });
   });
 
   afterEach(function(done) {

@@ -29,10 +29,10 @@ describe('create app', function() {
 
     var self = this;
     // Create an express server to simulate npm, GitHub, and bower
-    var mockServer = express();
-    mockServer.use(bodyParser.json());
+    var expressMock = express();
+    expressMock.use(bodyParser.json());
 
-    mockServer.get('/metadata/templates.json', function(req, res) {
+    expressMock.get('/metadata/templates.json', function(req, res) {
       res.send(JSON.stringify({templates: self.templates}));
     });
 
@@ -40,7 +40,7 @@ describe('create app', function() {
       this.templates[0].gitHubRepo,
       this.templates[0].buildTools[0]);
 
-    mockServer.get(starterTemplateUrl, function(req, res) {
+    expressMock.get(starterTemplateUrl, function(req, res) {
       // Build a tar file on the fly.
       var pack = tarStream.pack();
 
@@ -65,7 +65,7 @@ describe('create app', function() {
       pack.pipe(zlib.createGzip()).pipe(res);
     });
 
-    mockServer.get('/npm/dependency.tar.gz', function(req, res) {
+    expressMock.get('/npm/dependency.tar.gz', function(req, res) {
       var pack = tarStream.pack();
 
       var packageJson = {name: 'dependency', version:'0.0.1', description:'sample module', repository:{}};
@@ -79,18 +79,22 @@ describe('create app', function() {
     });
 
     this.createdAppId = shortid.generate();
-    mockServer.post('/api/apps', function(req, res) {
-      debugger;
+    expressMock.post('/api/apps', function(req, res) {
       res.json({
         appId: self.createdAppId,
         name: req.body.name
       });
     });
 
-    mockServer.listen(9999, function() {
+    this.mockServer = expressMock.listen(9999, function() {
       log.info("Mock server listening on port 9999");
       done();
     });
+  });
+
+  after(function() {
+    if (this.mockServer)
+      this.mockServer.close();
   });
 
   beforeEach(function() {
@@ -121,6 +125,8 @@ describe('create app', function() {
   });
 
   it('creates app', function(done) {
+    this.timeout(1000);
+
     var program = {};
     var self = this;
     appCreate(this.program, function(err, app) {
