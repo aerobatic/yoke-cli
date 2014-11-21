@@ -23,6 +23,11 @@ var Gaze = require('gaze').Gaze;
 module.exports = function(program, done) {
   var aerobaticApp, watcher, localhostServer, liveReloadServer, watchedFiles = [], simulatorUrl;
 
+  if (program.simulator === true)
+    log.messageBox("Run a local server for assets while index page runs on simulator host.\nPress Ctrl+C to quit.");
+  else
+    log.messageBox("Run a full localhost server.\nPress Ctrl+C to quit.");
+
   var asyncTasks = [];
   asyncTasks.push(function(cb) {
     // Fetch the app from the API so we have access to the env variables.
@@ -51,7 +56,7 @@ module.exports = function(program, done) {
       
   asyncTasks.push(function(cb) {
     if (_.isEmpty(program.watch) === false)
-      buildTool(program.watch, {cwd: program.cwd, normalizeStdio: true}, cb);
+      buildTool(program.watch, {cwd: program.cwd, normalizeStdio: true, waitForExit: false}, cb);
     else
       cb();
   });
@@ -164,6 +169,7 @@ module.exports = function(program, done) {
   }
 
   function startLocalServer(callback) {
+    log.debug("Creating development express app");
     var localhost = express();
 
     var httpsOptions = {};
@@ -283,7 +289,7 @@ module.exports = function(program, done) {
 
     // Verify that the build type is valid.
     if (_.contains(['debug', 'release'], program.build) === false) {
-      return callback(new Error("Invalid build option value. Valid values are 'debug' and 'release'."));
+      return callback("Invalid build option value. Valid values are 'debug' and 'release'.");
     }
 
     // If an explicit baseDir was specified for the current build type, ensure it exists.
@@ -291,9 +297,9 @@ module.exports = function(program, done) {
       var dir = path.join(program.cwd, program.baseDirs[program.build]);
 
       if (!fs.existsSync(dir)) {
-        return callback(new Error(util.format("The %s directory %s specified in package.json does not exist.", 
+        return callback(util.format("The %s directory %s specified in package.json does not exist.", 
           program.build, 
-          program.baseDirs[program.build])));
+          program.baseDirs[program.build]));
       }
       program.baseDir = dir;
     } 
@@ -312,8 +318,8 @@ module.exports = function(program, done) {
     var indexPageNames = ['index.html'] //, 'index.haml', 'index.jade'];
     program.indexPage = helper.takeFirstExistsPath(program.baseDir, indexPageNames);
     if (!program.indexPage) {
-      return callback(new Error(util.format("Could not find any of the following pages in %s: %s", 
-        JSON.stringify(indexPageNames), program.baseDir)));
+      return callback(util.format("Could not find any of the following pages in %s: %s", 
+        JSON.stringify(indexPageNames), program.baseDir));
     }
     else
       log.debug("Using index page %s", program.indexPage);
