@@ -16,6 +16,7 @@ var onFinished = require('on-finished');
 var chalk = require('chalk');
 var bodyParser = require('body-parser');
 var api = require('../lib/api');
+var helper = require('../lib/helper');
 var indexPage = require('../lib/indexPage');
 var Gaze = require('gaze').Gaze;
 
@@ -304,12 +305,12 @@ module.exports = function(program, done) {
         release: ['dist', 'build']
       };
 
-      program.baseDir = takeFirstExisting(program.cwd, baseDirConventions[program.build], program.cwd);
+      program.baseDir = helper.takeFirstExistsPath(program.cwd, baseDirConventions[program.build], program.cwd);
     } 
 
     // Find the index page
-    var indexPageNames = ['index.html', 'index.haml', 'index.jade'];
-    program.indexPage = takeFirstExisting(program.baseDir, indexPageNames);
+    var indexPageNames = ['index.html'] //, 'index.haml', 'index.jade'];
+    program.indexPage = helper.takeFirstExistsPath(program.baseDir, indexPageNames);
     if (!program.indexPage) {
       return callback(new Error(util.format("Could not find any of the following pages in %s: %s", 
         JSON.stringify(indexPageNames), program.baseDir)));
@@ -319,7 +320,7 @@ module.exports = function(program, done) {
 
     var loginPageNames = ['login.html', 'login.haml', 'login.jade'];
     if (aerobaticApp.authConfig && aerobaticApp.authConfig.type === 'oauth') {
-      program.loginPage = takeFirstExisting(program.baseDir, loginPageNames);
+      program.loginPage = helper.takeFirstExistsPath(program.baseDir, loginPageNames);
       if (!program.loginPage) {
         return callback(new Error(util.format("Apps with oauth enabled require a login page. None of the following pages exist in %s: %s", 
           JSON.stringify(loginPageNames), program.baseDir)));
@@ -329,17 +330,6 @@ module.exports = function(program, done) {
     }
 
     callback();
-  }
-
-  // Return the first file or directory that exists.
-  function takeFirstExisting(baseDir, candidates, fallback) {
-    for (var i=0; i<candidates.length; i++) {
-      var dir = path.join(baseDir, candidates[i]);
-      if (fs.existsSync(dir))
-        return dir;
-    }
-    // If none of the candidate dirs exist, use the current directory.
-    return fallback;
   }
 
   // Build the URL to the simulator host
