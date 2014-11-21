@@ -21,6 +21,8 @@ module.exports = function(program, done) {
     baseDir: process.cwd()
   });
 
+  log.messageBox("Create a new Aerobatic app");
+
   collectInput(function(err, answers) {
     if (err) return done(err);
 

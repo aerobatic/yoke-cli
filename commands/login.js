@@ -30,8 +30,9 @@ module.exports = function(program, done) {
     }
   ];
 
-  console.log("You can access your userId and secretKey on your Aerobatic profile:");
-  console.log("https://portal.aerobaticapp.com/profile");
+  log.messageBox(['Login to Aerobatic', 
+    'You can access your userId and secretKey on your profile page:',
+    'https://portal.aerobaticapp.com/profile']);
 
   inquirer.prompt(questions, function( answers ) {
     // Write the values to the .aerobatic file
