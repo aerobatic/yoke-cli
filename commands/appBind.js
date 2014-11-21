@@ -17,6 +17,8 @@ module.exports = function(program, done) {
     cwd: process.cwd()
   });
 
+  log.messageBox("Bind the current directory to an existing Aerobatic app.");
+
   var asyncTasks = [], organizations, orgId, applications, appId;
 
   // First read existing config data from package.json
@@ -24,8 +26,8 @@ module.exports = function(program, done) {
     log.debug("Reading aerobatic config from package.json");
     readConfigFromPackageJson(function(err, config) {
       if (err) return cb(err);
+      if (config) appId = config.appId;
 
-      appId = config.appId;
       cb();
     });
   });
