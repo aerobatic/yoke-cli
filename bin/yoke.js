@@ -9,8 +9,16 @@ var fs = require('fs');
 var _ = require('lodash');
 var async = require('async');
 var log = require('../lib/log');
+var updateNotifier = require('update-notifier');
+var pkg = require('../package.json');
 
 require('simple-errors');
+
+updateNotifier({
+  packageName: pkg.name, 
+  packageVersion: pkg.version,
+  updateCheckInterval: 1000 * 60 * 60 * 2 // Check for updates every 2 hours
+}).notify();
 
 program.version(require('../package.json').version)
   .option('-d, --debug', 'Emit debug messages')
@@ -30,9 +38,9 @@ program
   .action(commandAction('appCreate', {loadNpmConfig:false}));
 
 program 
-  .command('app:init')
-  .description('Initialize the current directory with an existing Aerobatic app')
-  .action(commandAction('appInit', {loadNpmConfig:false}));
+  .command('app:bind')
+  .description('Bind the current directory to an existing Aerobatic app')
+  .action(commandAction('appBind', {loadNpmConfig:false}));
 
 program
   .option('-o, --open', 'Open a browser to the local server')
@@ -47,12 +55,12 @@ program
   .action(commandAction('serve', {simulator: true}));
 
 program
+  .option('-u, --unattended', 'Run in unattended mode')
+  .option('-v, --version', 'Version name')
   .option('-m, --message', 'Version message')
   .command('deploy')
   .description('Deploy a new version of the app')
-  .action(function() {
-    // Read the files to deploy from the package.json 
-  });
+  .action(commandAction('deploy'));
 
 program
   .command('*')
@@ -92,6 +100,8 @@ function commandAction(name, options) {
       if (err) {
         if (err instanceof Error)
           log.error(err.stack || err.toString());
+        else if (_.isString(err))
+          log.error(err);
 
         process.exit();
       }
@@ -105,7 +115,11 @@ function commandAction(name, options) {
 
       require('../commands/' + name)(program, function(err, onKill) {
         if (err) {
-          log.error(err.stack || err.toString());
+          if (err instanceof Error)
+            log.error(err.stack || err.toString());
+          else if (_.isString(err))
+            log.error(err);
+
           process.exit();
         }
 
@@ -162,7 +176,7 @@ function loadAerobaticNpmConfig(callback) {
 
   fs.exists(packageJsonPath, function(exists) {
     if (!exists)
-      return callback(new Error("File " + packageJsonPath + " does not exist"));
+      return callback("File " + packageJsonPath + " does not exist. Run 'npm init' to create it.");
 
     fs.readFile(packageJsonPath, function(err, contents) {
       if (err) return callback(err);
@@ -173,12 +187,15 @@ function loadAerobaticNpmConfig(callback) {
       }
       catch (e) {
         return callback(Error.create("File " + packageJsonPath + " is not valid JSON"));
-      }
+      }      
 
       if (!json._aerobatic)
-        return callback(Error.create("Missing _aerobatic section in package.json file. Try re-running the command 'yoke app:init'."));
+        return callback(Error.create("Missing _aerobatic section in package.json file. Try re-running the command 'yoke app:bind'."));
       if (!json._aerobatic.appId)
-        return callback(Error.create("Missing appId in _aerobatic section of package.json. Try re-running the command 'yoke app:init'."))
+        return callback(Error.create("Missing appId in _aerobatic section of package.json. Try re-running the command 'yoke app:bind'."))
+
+      // Read the version from package.json
+      json._aerobatic.appVersion = json.version;
 
       callback(null, json._aerobatic);
     });
