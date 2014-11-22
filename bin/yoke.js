@@ -22,9 +22,9 @@ updateNotifier({
 
 program.version(require('../package.json').version)
   .option('-d, --debug', 'Emit debug messages')
-  .option('-u, --userId', 'User id. If not provided the credentials in the .aerobatic file are used')
-  .option('-k, --secretKey', 'User secret key')
-  .option('--dev', 'Run yoke against the developement environment')
+  .option('-u, --userId [userId]', 'User id. If not provided the credentials in the .aerobatic file are used')
+  .option('-k, --secretKey [secretKey]', 'User secret key')
+  .option('--dev', 'Run yoke against the development environment')
   .option('--offline', 'Indicate that your are offline')
 
 program 
@@ -44,6 +44,7 @@ program
 
 program
   .option('-o, --open', 'Open a browser to the local server')
+  .option('--build [type]', 'The type of build to serve, either debug or release.', 'debug')
   .command('serve')
   .description("Run a localhost instance of the app")
   .action(commandAction('serve'));
@@ -56,8 +57,8 @@ program
 
 program
   .option('-u, --unattended', 'Run in unattended mode')
-  .option('-v, --version', 'Version name')
-  .option('-m, --message', 'Version message')
+  .option('-v, --version [version]', 'Version name')
+  .option('-m, --message [message]', 'Version message')
   .command('deploy')
   .description('Deploy a new version of the app')
   .action(commandAction('deploy'));
