@@ -153,18 +153,18 @@ function loadCredentials(callback) {
   // TODO: Check that .aerobatic file doesn't have overly permissive access similar to how openSSH does.
   fs.exists(aerobaticDotFile, function(exists) {
     if (!exists)
-      return callback(Error.create("No .aerobatic file exists. First run 'yoke login'"));
+      return callback("No .aerobatic file exists. First run 'yoke login'");
 
     var credentials;
     try {
       credentials = JSON.parse(fs.readFileSync(aerobaticDotFile));
     }
     catch (e) {
-      return callback(Error.create("Could not parse .aerobatic file JSON. Try re-running 'yoke login'"));
+      return callback("Could not parse .aerobatic file JSON. Try re-running 'yoke login'");
     }
   
     if (_.isEmpty(credentials.userId) || _.isEmpty(credentials.secretKey))
-      return callback(Error.create("Missing information in .aerobatic file. Try re-running 'yoke login'"));
+      return callback("Missing information in .aerobatic file. Try re-running 'yoke login'");
 
     log.debug("Credentials loaded, userId=%s", credentials.userId);
     callback(null, credentials);
@@ -186,13 +186,13 @@ function loadAerobaticNpmConfig(callback) {
         json = JSON.parse(contents);
       }
       catch (e) {
-        return callback(Error.create("File " + packageJsonPath + " is not valid JSON"));
+        return callback("File " + packageJsonPath + " is not valid JSON");
       }      
 
       if (!json._aerobatic)
-        return callback(Error.create("Missing _aerobatic section in package.json file. Try re-running the command 'yoke app:bind'."));
+        return callback("Missing _aerobatic section in package.json file. Try re-running the command 'yoke app:bind'.");
       if (!json._aerobatic.appId)
-        return callback(Error.create("Missing appId in _aerobatic section of package.json. Try re-running the command 'yoke app:bind'."))
+        return callback("Missing appId in _aerobatic section of package.json. Try re-running the command 'yoke app:bind'.")
 
       // Read the version from package.json
       json._aerobatic.appVersion = json.version;
