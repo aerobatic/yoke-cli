@@ -3,44 +3,86 @@ var inquirer = require('inquirer'),
   fs = require('fs'),
   path = require('path'),
   osenv = require('osenv'),
+  async = require('async'),
   log = require('../lib/log');
 
 module.exports = function(program, done) {
-  var questions = [
-    {
-      type:'input', 
-      name:'userId', 
-      validate: function(input) {
-        return /[a-z0-9-+]{10}/.test(input) || "Value should be 10 characters long";
-      },
-      message: 'userId'
-    },
-    {
-      type: 'input',
-      name: 'secretKey',
-      validate: function(input) {
-        if (/^[a-z0-9]+$/i.test(input) === false)
-          return 'Value can only contain lowercase letters and numbers';
-        else if (input.length !== 30)
-          return 'Value is ' + input.length + ' characters long. Must be 20 characters.';
-        else
-          return true;
-      },
-      message: 'secretKey'
-    }
-  ];
+  var aerobaticDotFile = path.join(osenv.home(), '.aerobatic');
 
-  log.messageBox(['Login to Aerobatic', 
-    'You can access your userId and secretKey on your profile page:',
-    'https://portal.aerobaticapp.com/profile']);
+  var asyncTasks = [], existingUserId, credentialsJson;
 
-  inquirer.prompt(questions, function( answers ) {
-    // Write the values to the .aerobatic file
-    var file = path.join(osenv.home(), '.aerobatic');
-    
-    log.progress("Writing userId and secretKey to file: " + file);
-    log.progress("You can now make API calls from the yoke CLI");
+  asyncTasks.push(readExistingCredentials);
+  asyncTasks.push(promptForInputs);
+  asyncTasks.push(writeAerobaticDotFile);
 
-    fs.writeFile(file, JSON.stringify(answers), done);
+  async.series(asyncTasks, function(err) {
+    if (err) return done(err);
+
+    log.success("Your credentials have been stored. You can now use all the yoke commands.");
+    done();
   });
+
+  function readExistingCredentials(callback) {
+    fs.readFile(aerobaticDotFile, function(err, contents) {
+      if (err) return cb();
+
+      var json;
+      try {
+        json = JSON.parse(contents);
+      }
+      catch (err) {
+        return cb();
+      }
+
+      existingUserId = json.userId;
+      callback();
+    });
+  }
+
+  function promptForInputs(callback) {
+    var questions = [
+      {
+        type:'input',
+        name:'userId',
+        default: existingUserId,
+        validate: function(input) {
+          if (/^[a-z0-9\-]+$/i.test(input) === false) 
+            return "Value contains invalid characters.";
+          else
+            return true;
+        },
+        message: 'userId'
+      },
+      {
+        type: 'password',
+        name: 'secretKey',
+        validate: function(input) {
+          if (/^[a-z0-9]+$/i.test(input) === false)
+            return 'Value contains invalid characters.';
+          else if (input.length !== 32)
+            return 'Value is ' + input.length + ' characters long. Must be 32 characters.';
+          else
+            return true;
+        },
+        message: 'secretKey'
+      }
+    ];
+
+    log.messageBox(['Login to Aerobatic', 
+      'You can access your userId and secretKey on your profile page:',
+      'https://portal.aerobaticapp.com/profile']);
+
+    inquirer.prompt(questions, function(answers) {
+      credentialsJson = answers;
+      log.blankLine();
+      
+      callback();
+    });
+  }
+
+  function writeAerobaticDotFile(callback) {
+    // Write the values to the .aerobatic file
+    log.info("Writing userId and secretKey to file: %s", aerobaticDotFile);
+    fs.writeFile(aerobaticDotFile, JSON.stringify(credentialsJson), callback);
+  }
 };
