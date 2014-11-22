@@ -25,8 +25,10 @@ module.exports = function(program, done) {
 
   if (program.simulator === true)
     log.messageBox("Run a local server for assets while index page runs on simulator host.\nPress Ctrl+C to quit.");
-  else
+  else {
+    program.simulator = false;
     log.messageBox("Run a full localhost server.\nPress Ctrl+C to quit.");
+  }
 
   var asyncTasks = [];
   asyncTasks.push(function(cb) {
@@ -36,8 +38,9 @@ module.exports = function(program, done) {
       if (err) return cb(err);
 
       // Apps with oauth enabled need to be run in simulator mode.
-      if (app.authConfig && app.authConfig.type === 'oauth' && program.simulator === false) {
-        return cb(new Error("This app has OAuth enabled. Development of this app should happen in simulator mode. Try running 'yoke sim' instead."))
+      // debugger;
+      if (app.authConfig && app.authConfig.type === 'oauth' && program.simulator !== true) {
+        return cb("This app has OAuth enabled. Development of this app should happen in simulator mode. Try running 'yoke sim' instead.");
       }
       
       aerobaticApp = app;     
@@ -319,7 +322,7 @@ module.exports = function(program, done) {
     program.indexPage = helper.takeFirstExistsPath(program.baseDir, indexPageNames);
     if (!program.indexPage) {
       return callback(util.format("Could not find any of the following pages in %s: %s", 
-        JSON.stringify(indexPageNames), program.baseDir));
+        program.baseDir, JSON.stringify(indexPageNames)));
     }
     else
       log.debug("Using index page %s", program.indexPage);
@@ -328,8 +331,8 @@ module.exports = function(program, done) {
     if (aerobaticApp.authConfig && aerobaticApp.authConfig.type === 'oauth') {
       program.loginPage = helper.takeFirstExistsPath(program.baseDir, loginPageNames);
       if (!program.loginPage) {
-        return callback(new Error(util.format("Apps with oauth enabled require a login page. None of the following pages exist in %s: %s", 
-          JSON.stringify(loginPageNames), program.baseDir)));
+        return callback(util.format("Apps with oauth enabled require a login page. None of the following pages exist in %s: %s", 
+          JSON.stringify(loginPageNames), program.baseDir));
       }
       else
         log.debug("Using login page %s", program.loginPage);
