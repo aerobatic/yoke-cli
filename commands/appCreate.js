@@ -120,17 +120,19 @@ module.exports = function(program, done) {
   function promptQuestions(lookups, callback) {
     var questions = [];
 
+    var orgChoices = [{name: 'Personal', value: null}];
+    _.each(lookups.organizations, function(org) {
+      orgChoices.push({name: org.name, value: org.orgId});
+    });
+
     // Question to choose which organization the app belongs
-    debugger;
     if (_.isArray(lookups.organizations) && lookups.organizations.length > 0) {
       questions.push({
         type: 'list',
         name: 'orgId',
-        choices: _.map(lookups.organizations, function(org) {
-          return {name: org.name, value: org.orgId};
-        }),
+        choices: orgChoices,
         message: "Which organization does this app belong?"
-      }); 
+      });
     }
 
     questions.push({

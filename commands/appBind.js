@@ -64,12 +64,15 @@ module.exports = function(program, done) {
     if (organizations.length == 0)
       return cb();
 
+    var choices = [{name: 'Personal', value: null}];
+    _.each(organizations, function(org) {
+      choices.push({name: org.name, value: org.orgId});
+    });
+
     var pickOrgQuestion = {
       type: 'list',
       message: "Select the organization the app belongs to",
-      choices: _.map(organizations, function(org) {
-        return {name: org.name, value: org.orgId};
-      }),
+      choices: choices,
       name: 'orgId'
     };
 
@@ -79,7 +82,7 @@ module.exports = function(program, done) {
     });
   });
 
-  asyncTasks.push(function(cb) {
+  asyncTasks.push(function(cb) {    
     var apiPath = orgId ? '/api/orgs/' + orgId + '/apps' : '/api/profile/apps';
     api(program, {path: apiPath}, function(err, apps) {
       if (err) return done(err);
@@ -106,6 +109,8 @@ module.exports = function(program, done) {
 
     program.inquirer.prompt(appPickQuestion, function(answers) {
       appId = answers.appId;
+      log.blankLine();
+      
       cb();
     });
   });
