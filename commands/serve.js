@@ -237,6 +237,18 @@ module.exports = function(program, done) {
     });
 
     localhost.use(cors());
+
+    // Serve requests for bower_components or node_modules from the root
+    // of the project directory structure.
+    // TODO: Need to read .bowerrc file for alternative name for components dir
+    var rootServer = express.static(program.cwd, {index: false});
+    localhost.use(function(req, res, next) {
+      if (/^\/(node_modules|bower_components)\//.test(req.path))
+        rootServer(req, res, next);
+      else
+        next();
+    });
+
     localhost.use(express.static(program.baseDir, {index: false}));
 
     // Create the livereload server
@@ -315,7 +327,7 @@ module.exports = function(program, done) {
       };
 
       program.baseDir = helper.takeFirstExistsPath(program.cwd, baseDirConventions[program.build], program.cwd);
-    } 
+    }
 
     // Find the index page
     var indexPageNames = ['index.html'] //, 'index.haml', 'index.jade'];
@@ -327,7 +339,7 @@ module.exports = function(program, done) {
     else
       log.debug("Using index page %s", program.indexPage);
 
-    var loginPageNames = ['login.html', 'login.haml', 'login.jade'];
+    var loginPageNames = ['login.html']; //, 'login.haml', 'login.jade'];
     if (aerobaticApp.authConfig && aerobaticApp.authConfig.type === 'oauth') {
       program.loginPage = helper.takeFirstExistsPath(program.baseDir, loginPageNames);
       if (!program.loginPage) {
