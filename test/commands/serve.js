@@ -78,7 +78,7 @@ describe('serve command', function() {
   it('returns error when no index page exists', function(done) {
     serve(this.program, function(err) {
       assert.isNotNull(err);
-      assert.isTrue(/Could not find any of the following/.test(err.message));
+      assert.isTrue(/Could not find any of the following/.test(err));
       done();
     }); 
   });
@@ -107,7 +107,7 @@ describe('serve command', function() {
 
     serve(this.program, function(err) {
       assert.isDefined(err);
-      assert.isTrue(/specified in package.json does not exist/.test(err.message));
+      assert.isTrue(/specified in package.json does not exist/.test(err));
       done();
     });
   });
@@ -117,7 +117,7 @@ describe('serve command', function() {
       this.endHandle = end;
 
       assert.isDefined(err);
-      assert.isTrue(/Could not find any of the following pages/.test(err.message));
+      assert.isTrue(/Could not find any of the following pages/.test(err));
       done();
     });
   });
@@ -126,7 +126,7 @@ describe('serve command', function() {
     this.program.build = 'invalid';
     serve(this.program, function(err) {
       assert.isDefined(err);
-      assert.isTrue(/Invalid build option value/.test(err.message));
+      assert.isTrue(/Invalid build option value/.test(err));
       done();
     });
   });
