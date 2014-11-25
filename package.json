@@ -1,6 +1,6 @@
 {
   "name": "yoke-cli",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "Command line interface for building and deploying Aerobatic apps",
   "bin": {
     "yoke": "bin/yoke.js"
@@ -11,6 +11,12 @@
     "type": "git",
     "url": "https://github.com/aerobatic/yoke-cli.git"
   },
+  "contributors": [
+    { 
+      "name" : "David Von Lehman",
+      "url" : "https://github.com/dvonlehman"
+    }
+  ],
   "preferGlobal": "true",
   "main": "bin/yoke",
   "dependencies": {
