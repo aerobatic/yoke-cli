@@ -56,13 +56,12 @@ module.exports = function(program, done) {
       uploadIndexPageToSimulator([program.indexPage, program.loginPage], cb);
     });
   }
-      
-  asyncTasks.push(function(cb) {
-    if (_.isEmpty(program.watch) === false)
-      buildTool(program.watch, {cwd: program.cwd, normalizeStdio: true, waitForExit: false}, cb);
-    else
-      cb();
-  });
+  
+  if (program.watch === true) {
+    asyncTasks.push(function(cb) {
+      buildTool('watch', {cwd: program.cwd, normalizeStdio: true, waitForExit: false}, cb);
+    });
+  }
 
   asyncTasks.push(function(cb) {
     // Start the localhost server
@@ -90,6 +89,9 @@ module.exports = function(program, done) {
       var indexPages = _.compact([program.indexPage, program.loginPage]); 
 
       log.info("Watching pages %s", JSON.stringify(indexPages));
+      // TODO: Should we delay starting the watcher briefly to give 
+      // the grunt or gulp watch initialize to modify some files. Otherwise
+      // we could get an immediete livereload refresh.
       watcher = new Gaze(indexPages, {maxListeners: 100}, function() {
         waitForExit();
       });
@@ -290,9 +292,10 @@ module.exports = function(program, done) {
   }
 
   function setDefaults(callback) {
+    program.build = program.release === true ? 'release' : 'debug';
+
     _.defaults(program, {
       port: 3000,
-      build: 'debug',
       watch: 'watch',
       livereload: true,
       // Intentionally not using standard livereload port to avoid collisions if 

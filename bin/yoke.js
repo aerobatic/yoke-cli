@@ -44,7 +44,8 @@ program
 
 program
   .option('-o, --open', 'Open a browser to the local server')
-  .option('--build [type]', 'The type of build to serve, either debug or release.', 'debug')
+  .option('--watch', 'Run the "watch" task for grunt or gulp when the local server starts')
+  .option('--release', 'Run in release mode')
   .command('serve')
   .description("Run a localhost instance of the app")
   .action(commandAction('serve'));
