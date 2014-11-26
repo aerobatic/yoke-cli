@@ -220,7 +220,8 @@ module.exports = function(program, done) {
 
     // debugger;
     templates.forEach(function(template, i) {
-      choices.push({name:template.title, value: template});
+      if (template.published !== false)
+        choices.push({name:template.title, value: template});
     });
 
     return choices;
@@ -251,7 +252,11 @@ module.exports = function(program, done) {
   }
 
   function unpackTemplate(template, buildTool, appDir, callback) {
-    var branch = buildTool || 'master';
+    var buildTool;
+    if (buildTool)
+      branch = buildTool + '-yoke';
+    else
+      branch = 'master';
 
     // Download, unzip, and extract the template from GitHub repo.
     var archiveUrl = program.gitHubUrl + '/' + template.gitHubRepo + '/archive/' + branch + '.tar.gz';
@@ -267,14 +272,17 @@ module.exports = function(program, done) {
   }
 
   function invokeCreateAppApi(answers, callback) {
-    // TODO: POST to /dev/app
+    var appData = {
+      name: answers.appName
+    };
+
+    if (answers.orgId)
+      appData.orgId = answers.orgId;
+
     var options = {
       method: 'POST',
       path: '/api/apps',
-      json: {
-        name: answers.appName,
-        orgId: answers.orgId
-      }
+      json: appData
     };
 
     log.info("Invoking Aerobatic API to create app");
