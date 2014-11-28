@@ -36,7 +36,7 @@ describe('create app', function() {
       res.send(JSON.stringify({templates: self.templates}));
     });
 
-    var starterTemplateUrl = util.format('/github/%s/archive/%s.tar.gz',
+    var starterTemplateUrl = util.format('/github/%s/archive/%s-yoke.tar.gz',
       this.templates[0].gitHubRepo,
       this.templates[0].buildTools[0]);
 
