@@ -24,7 +24,7 @@ module.exports = function(program, done) {
 
   function readExistingCredentials(callback) {
     fs.readFile(aerobaticDotFile, function(err, contents) {
-      if (err) return cb();
+      if (err) return callback(err);
 
       var json;
       try {

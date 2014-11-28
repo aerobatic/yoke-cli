@@ -44,7 +44,6 @@ program
 
 program
   .option('-o, --open', 'Open a browser to the local server')
-  .option('--watch', 'Run the "watch" task for grunt or gulp when the local server starts')
   .option('--release', 'Run in release mode')
   .command('serve')
   .description("Run a localhost instance of the app")
@@ -193,13 +192,19 @@ function loadAerobaticNpmConfig(callback) {
 
       if (!json._aerobatic)
         return callback("Missing _aerobatic section in package.json file. Try re-running the command 'yoke app:bind'.");
-      if (!json._aerobatic.appId)
+
+      var aerobaticConfig = json._aerobatic;
+
+      if (!aerobaticConfig.appId)
         return callback("Missing appId in _aerobatic section of package.json. Try re-running the command 'yoke app:bind'.")
 
-      // Read the version from package.json
-      json._aerobatic.appVersion = json.version;
+      // Copy certain NPM standard attributes to the _aerobatic section.
+      _.extend(aerobaticConfig, {
+        appVersion: json.version,
+        npmScripts: json.scripts || {}
+      });
 
-      callback(null, json._aerobatic);
+      callback(null, aerobaticConfig);
     });
   });
 }

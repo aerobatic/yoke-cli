@@ -10,14 +10,18 @@ var https = require('https');
 var openBrowser = require('open');
 var path = require('path');
 var fs = require('fs');
+var osenv = require('osenv');
 var tinylr = require('tiny-lr');
 var urlParse = require('url').parse;
 var onFinished = require('on-finished');
 var chalk = require('chalk');
+var spawn = require('../lib/spawn');
 var bodyParser = require('body-parser');
+var processFinder = require('process-finder');
 var api = require('../lib/api');
 var helper = require('../lib/helper');
 var indexPage = require('../lib/indexPage');
+var preprocessors = require('../lib/preprocessors');
 var Gaze = require('gaze').Gaze;
 
 module.exports = function(program, done) {
@@ -50,6 +54,15 @@ module.exports = function(program, done) {
 
   asyncTasks.push(setDefaults);
 
+  asyncTasks.push(killPortProcesses);
+
+  // If serving in release mode, run the build step first.
+  if (program.build === 'release') {
+    asyncTasks.push(function(cb) {
+      spawn('npm', ['run-script', 'build'], cb);
+    });
+  }
+
   if (program.simulator === true) {
     // If this is simulator mode, upload the index pages to the simulator host.
     asyncTasks.push(function(cb) {
@@ -57,9 +70,11 @@ module.exports = function(program, done) {
     });
   }
   
-  if (program.watch === true) {
+  if (program.npmScripts.watch) {
+    log.debug("Found npm watch script");
     asyncTasks.push(function(cb) {
-      buildTool('watch', {cwd: program.cwd, normalizeStdio: true, waitForExit: false}, cb);
+      spawn('npm', ['run-script', 'watch'], {waitForExit: false}, cb);
+      // buildTool('watch', {cwd: program.cwd, normalizeStdio: true, waitForExit: false}, cb);
     });
   }
 
@@ -144,32 +159,52 @@ module.exports = function(program, done) {
         //TODO: What if several files all changed at once.. We should buffer 
         //them up and send just one notification to livereload.
         program.lastFileChanges = [filePath];
-        log.info("Livereload triggered by change to %s", filePath);
+
+        // if (program.simulator === true)
+        log.info("Livereload triggered by change to %s", assetUrlPath);
         tinylr.changed(assetUrlPath);
       }  
     }    
   }
 
   function uploadIndexPageToSimulator(indexPage, callback) {
-    var requestOptions = {
-      method: 'POST',
-      path: '/dev/' + program.appId + '/simulator',
-      form: {}
-    };
-
     if (_.isString(indexPage))
       indexPage = [indexPage];
     indexPage = _.compact(indexPage);
 
-    // Attach the files as multi-part
-    var request = api(program, requestOptions, callback);
-    var form = request.form();
+    var requestOptions = {
+      method: 'POST',
+      path: '/dev/' + program.appId + '/simulator',
+      formData: {}
+    };
 
-    log.info("Uploading index pages %s to simulator", indexPage);
+    async.each(indexPage, function(pagePath, cb) {
+      var extname = path.extname(pagePath);
+      var pageName = path.basename(pagePath, extname);
 
-    //  TODO: If the page is a .haml or .jade file, compile to html first.
-    _.each(indexPage, function(pagePath) {
-      form.append(path.basename(pagePath, '.html'), fs.createReadStream(pagePath));      
+      // If this extension has a pre-processor registered, perform preprocessing first.
+      preProcessor = preprocessors[extname.substr(1)];
+      if (preProcessor) {
+        preProcessor(pagePath, function(err, result) {
+          if (err) return cb(err);
+          
+          //HACK: Write the .html file to disk. Can't seem to mimic a read stream from a string.
+          var tempFile = path.join(osenv.tmpdir(), new Date().getTime() + '.html');
+          fs.writeFile(tempFile, result.output, function(err) {
+            if (err) return cb(err);
+
+            requestOptions.formData[pageName] = fs.createReadStream(tempFile);
+            cb(null);  
+          });
+        });
+      }
+      else {
+        requestOptions.formData[pageName] = fs.createReadStream(pagePath);
+        cb(null);
+      }
+    }, function(err, formValues) {
+      if (err) return callback(err);
+      api(program, requestOptions, callback);
     });
   }
 
@@ -190,8 +225,17 @@ module.exports = function(program, done) {
       });
     }
 
+    // The proxy is not enabled in localhost server mode. 
+    localhost.get('/proxy', function(req, res, next) {
+      log.error("Cannot call the proxy in localhost mode. Run 'yoke sim' instead.")
+      res.status(403).send("Cannot call the proxy in localhost mode. Run 'yoke sim' instead");
+    });
+
     localhost.use(function(req, res, next) {
       onFinished(res, function() {
+        if (res.statusCode === 500)
+          return done("Cannot use the proxy in localhost mode. Run 'yoke sim' instead.");
+
         // Write each request to the log in a format that emulates NPM
         log.writeln({
           process: 'yoke', 
@@ -251,6 +295,30 @@ module.exports = function(program, done) {
         next();
     });
 
+    localhost.use(function(req, res, next) {
+      // Check if the request is for a file extension that has a pre-processor configured
+      var lastDotIndex = req.path.lastIndexOf('.');
+      if (lastDotIndex === -1)
+        return next();
+
+      var extname = req.path.substr(lastDotIndex+1);
+      if (preprocessors[extname]) {
+        var filePath = path.join(program.baseDir, req.path);
+        log.debug("Running preprocessor %s on file %s", extname, filePath);
+        preprocessors[extname](filePath, function(err, result) {
+          if (err) {
+            log.error(err.message);
+            return res.status(500).send(err.message);
+          }
+
+          res.set('Content-Type', result.contentType);
+          return res.send(result.output);
+        });
+      }
+      else 
+        next();
+    });
+
     localhost.use(express.static(program.baseDir, {index: false}));
 
     // Create the livereload server
@@ -284,25 +352,35 @@ module.exports = function(program, done) {
       });
     }
     else {
-       localhostServer = http.createServer(localhost).listen(program.port, function() {
+      log.debug("Starting localhost server on port %s", program.port);
+      localhostServer = http.createServer(localhost).listen(program.port, function() {
         var url = "http://localhost:" + program.port;
         callback(url);
       });
     }
   }
 
-  function setDefaults(callback) {
-    program.build = program.release === true ? 'release' : 'debug';
+  function killPortProcesses(callback) {
+    async.each([program.port, program.livereloadPort], function(port, cb) {
+      processFinder.find(port, function(err, pids) {
+        if (err) return cb(err);
+        log.info("Killing process on port %s", port);
+        pids.forEach(process.kill);
+        cb();
+      });
+    }, callback);
+  }
 
+  function setDefaults(callback) {
     _.defaults(program, {
       port: 3000,
-      watch: 'watch',
       livereload: true,
       // Intentionally not using standard livereload port to avoid collisions if 
       // the app is also using a browser livereload plugin.
       livereloadPort: 35728,
       cwd: process.cwd(),
-      baseDirs: {}
+      baseDirs: {},
+      build: 'debug'
     });
 
     // Verify that the build type is valid.
@@ -333,7 +411,7 @@ module.exports = function(program, done) {
     }
 
     // Find the index page
-    var indexPageNames = ['index.html'] //, 'index.haml', 'index.jade'];
+    var indexPageNames = ['index.html', 'index.jade']; //, 'index.haml', ];
     program.indexPage = helper.takeFirstExistsPath(program.baseDir, indexPageNames);
     if (!program.indexPage) {
       return callback(util.format("Could not find any of the following pages in %s: %s", 

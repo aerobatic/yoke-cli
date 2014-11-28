@@ -40,10 +40,10 @@ module.exports = function(program, done) {
     collectVersionInputs(cb);
   });
 
-  if (program.unattended !== true) {
-    // Run the Grunt or Gulp build command
+  if (runBuildStep === true) {
+    // Run "npm run-script build"
     asyncTasks.push(function(cb) {
-      buildTool('build', {normalizeStdio: true}, cb);
+      spawn('npm', ['run-script', 'build'], cb);
     });
   }
 
@@ -145,7 +145,7 @@ module.exports = function(program, done) {
     // Perform an unattended deployment, possibly from a CI process.
     if (program.unattended === true) {
       // Assuming that a CI process would have already run the build step.
-      runBuildStep = true;
+      runBuildStep = false;
       if (_.isEmpty(program.version)) {
         var versionNameError = validateVersionName(program.version);
         if (_.isString(versionNameError))
@@ -180,7 +180,10 @@ module.exports = function(program, done) {
       {
         type: 'confirm',
         name: 'runBuild',
-        message: 'Run the Grunt or Gulp build?',
+        message: 'Run "npm run-script build?"',
+        when: function() {
+          return _.isEmpty(program.npmScripts.build) === false;
+        },
         default: true
       },
       // TODO: Allow organization to disallow this.

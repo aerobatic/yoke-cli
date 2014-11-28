@@ -230,12 +230,11 @@ module.exports = function(program, done) {
   function npmInstall(appDir, callback) {
     fs.exists(path.join(appDir, 'package.json'), function(exists) {
       if (!exists) {
-        log.debug("No package.json file exists in app directory");
-        return callback();
+        return callback("No package.json file exists in app directory");
       }
 
-      log.info("Installing npm dependencies");
-      spawn('npm', ['install'], appDir, callback);
+      log.info("Installing npm dependencies in %s", appDir);
+      spawn('npm', ['install'], {cwd: appDir, inheritStdio: true}, callback);
     });
   }
 
@@ -247,7 +246,7 @@ module.exports = function(program, done) {
       }
 
       log.info("Installing bower dependencies");
-      spawn('bower', ['install'], appDir, callback);
+      spawn('bower', ['install'], {cwd: appDir, inheritStdio: true}, callback);
     });
   }
 
