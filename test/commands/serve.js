@@ -53,16 +53,17 @@ describe('serve command', function() {
       cwd: this.tmp,
       appId: this.app.appId,
       apiUrl: "http://localhost:9999",
-      port: 4000
+      port: 4000,
+      livereloadPort: 32889,
+      npmScripts: {}
     };
 
     this.endHandle = null;
 
     rimraf(this.tmp, function(err) {
+      if (err) return done(err);
       // Recreate the tmp directory
-      fs.mkdir(self.tmp, function(){
-        done();
-      });
+      fs.mkdir(self.tmp, done);
     });
   });
 
@@ -126,6 +127,7 @@ describe('serve command', function() {
     this.program.build = 'invalid';
     serve(this.program, function(err) {
       assert.isDefined(err);
+      console.log(err);
       assert.isTrue(/Invalid build option value/.test(err));
       done();
     });
