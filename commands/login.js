@@ -31,7 +31,7 @@ module.exports = function(program, done) {
         json = JSON.parse(contents);
       }
       catch (err) {
-        return cb();
+        json = {};
       }
 
       existingUserId = json.userId;
@@ -46,7 +46,7 @@ module.exports = function(program, done) {
         name:'userId',
         default: existingUserId,
         validate: function(input) {
-          if (/^[a-z0-9\-]+$/i.test(input) === false) 
+          if (/^[a-z0-9\-]+$/i.test(input) === false)
             return "Value contains invalid characters.";
           else
             return true;
@@ -68,14 +68,14 @@ module.exports = function(program, done) {
       }
     ];
 
-    log.messageBox(['Login to Aerobatic', 
+    log.messageBox(['Login to Aerobatic',
       'You can access your userId and secretKey on your profile page:',
       'https://portal.aerobaticapp.com/profile']);
 
     inquirer.prompt(questions, function(answers) {
       credentialsJson = answers;
       log.blankLine();
-      
+
       callback();
     });
   }
