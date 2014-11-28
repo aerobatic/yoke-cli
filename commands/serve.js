@@ -37,7 +37,7 @@ module.exports = function(program, done) {
   var asyncTasks = [];
   asyncTasks.push(function(cb) {
     // Fetch the app from the API so we have access to the env variables.
-    log.info("Fetching app info from Aerobatic API");  
+    log.info("Fetching app info from Aerobatic API");
     api(program, {method: 'GET', path: '/api/apps/' + program.appId}, function(err, app) {
       if (err) return cb(err);
 
@@ -46,8 +46,8 @@ module.exports = function(program, done) {
       if (app.authConfig && app.authConfig.type === 'oauth' && program.simulator !== true) {
         return cb("This app has OAuth enabled. Development of this app should happen in simulator mode. Try running 'yoke sim' instead.");
       }
-      
-      aerobaticApp = app;     
+
+      aerobaticApp = app;
       cb();
     });
   });
@@ -69,7 +69,7 @@ module.exports = function(program, done) {
       uploadIndexPageToSimulator([program.indexPage, program.loginPage], cb);
     });
   }
-  
+
   if (program.npmScripts.watch) {
     log.debug("Found npm watch script");
     asyncTasks.push(function(cb) {
@@ -101,10 +101,10 @@ module.exports = function(program, done) {
     if (program.livereload) {
       log.debug("Starting watcher for file changes");
 
-      var indexPages = _.compact([program.indexPage, program.loginPage]); 
+      var indexPages = _.compact([program.indexPage, program.loginPage]);
 
       log.info("Watching pages %s", JSON.stringify(indexPages));
-      // TODO: Should we delay starting the watcher briefly to give 
+      // TODO: Should we delay starting the watcher briefly to give
       // the grunt or gulp watch initialize to modify some files. Otherwise
       // we could get an immediete livereload refresh.
       watcher = new Gaze(indexPages, {maxListeners: 100}, function() {
@@ -156,15 +156,15 @@ module.exports = function(program, done) {
         assetUrlPath = path.relative(program.baseDir, filePath);
 
       if (assetUrlPath) {
-        //TODO: What if several files all changed at once.. We should buffer 
+        //TODO: What if several files all changed at once.. We should buffer
         //them up and send just one notification to livereload.
         program.lastFileChanges = [filePath];
 
         // if (program.simulator === true)
         log.info("Livereload triggered by change to %s", assetUrlPath);
         tinylr.changed(assetUrlPath);
-      }  
-    }    
+      }
+    }
   }
 
   function uploadIndexPageToSimulator(indexPage, callback) {
@@ -187,14 +187,14 @@ module.exports = function(program, done) {
       if (preProcessor) {
         preProcessor(pagePath, function(err, result) {
           if (err) return cb(err);
-          
+
           //HACK: Write the .html file to disk. Can't seem to mimic a read stream from a string.
           var tempFile = path.join(osenv.tmpdir(), new Date().getTime() + '.html');
           fs.writeFile(tempFile, result.output, function(err) {
             if (err) return cb(err);
 
             requestOptions.formData[pageName] = fs.createReadStream(tempFile);
-            cb(null);  
+            cb(null);
           });
         });
       }
@@ -225,7 +225,7 @@ module.exports = function(program, done) {
       });
     }
 
-    // The proxy is not enabled in localhost server mode. 
+    // The proxy is not enabled in localhost server mode.
     localhost.get('/proxy', function(req, res, next) {
       log.error("Cannot call the proxy in localhost mode. Run 'yoke sim' instead.")
       res.status(403).send("Cannot call the proxy in localhost mode. Run 'yoke sim' instead");
@@ -238,29 +238,33 @@ module.exports = function(program, done) {
 
         // Write each request to the log in a format that emulates NPM
         log.writeln({
-          process: 'yoke', 
-          status: res.statusCode, 
+          process: 'yoke',
+          status: res.statusCode,
           color: res.statusCode === 200 ? 'green' : 'magenta',
           message: "Serving " + req.path
         });
       });
 
+      // If the request path has no file extension, then assume it is the index page.
+      req.indexPage =  /\.[a-z]+$/.test(req.path) === false;
+      req.vendorAsset = /^\/(node_modules|bower_components)\//.test(req.path) === true;
+
       // Make sure the path is in the list of files to watch.
-      if (program.livereload) {
+      if (program.livereload && !req.vendorAsset) {
         // Watch any file that is requested by the page.
         var assetPath;
-        if (req.path === '/')
+        if (req.indexPage)
           assetPath = program.indexPage;
         else
           assetPath = path.join(program.baseDir, req.path);
 
         if (_.contains(watchedFiles, assetPath) === false) {
           watcher.add([assetPath], function() {
-            log.debug("Added watch to file %s", assetPath);  
+            log.debug("Added watch to file %s", assetPath);
             watchedFiles.push(assetPath);
             next();
           });
-        } 
+        }
         else
           next();
       }
@@ -272,14 +276,22 @@ module.exports = function(program, done) {
       // Redirect the index page in simulator mode to the simulator host.
       if (program.simulator === true)
         return res.redirect(simulatorUrl);
+      next();
+    });
 
-      // TODO: If it's .jade or .haml compile them on the fly
-      indexPage(program.indexPage, aerobaticApp, program, function(err, html) {        
-        if (err) return next(err);
+    localhost.use(function(req, res, next) {
+      // If the path has a file extension, go onto the next middleware.
+      if (req.indexPage === true) {
+        // Serve up the index page.
+        indexPage(program.indexPage, aerobaticApp, program, function(err, html) {
+          if (err) return next(err);
 
-        res.set('Content-Type', 'text/html');
-        res.send(html);
-      });
+          res.set('Content-Type', 'text/html');
+          res.send(html);
+        });
+      }
+      else
+        next();
     });
 
     localhost.use(cors());
@@ -289,7 +301,7 @@ module.exports = function(program, done) {
     // TODO: Need to read .bowerrc file for alternative name for components dir
     var rootServer = express.static(program.cwd, {index: false});
     localhost.use(function(req, res, next) {
-      if (/^\/(node_modules|bower_components)\//.test(req.path))
+      if (req.vendorAsset === true)
         rootServer(req, res, next);
       else
         next();
@@ -315,7 +327,7 @@ module.exports = function(program, done) {
           return res.send(result.output);
         });
       }
-      else 
+      else
         next();
     });
 
@@ -343,7 +355,6 @@ module.exports = function(program, done) {
     localhost.use(function(err, req, res, next) {
       return done(err);
     });
-
 
     if (aerobaticApp.requireSsl === true) {
       localhostServer = https.createServer(httpsOptions, localhost).listen(program.port, function() {
@@ -375,7 +386,7 @@ module.exports = function(program, done) {
     _.defaults(program, {
       port: 3000,
       livereload: true,
-      // Intentionally not using standard livereload port to avoid collisions if 
+      // Intentionally not using standard livereload port to avoid collisions if
       // the app is also using a browser livereload plugin.
       livereloadPort: 35728,
       cwd: process.cwd(),
@@ -393,12 +404,12 @@ module.exports = function(program, done) {
       var dir = path.join(program.cwd, program.baseDirs[program.build]);
 
       if (!fs.existsSync(dir)) {
-        return callback(util.format("The %s directory %s specified in package.json does not exist.", 
-          program.build, 
+        return callback(util.format("The %s directory %s specified in package.json does not exist.",
+          program.build,
           program.baseDirs[program.build]));
       }
       program.baseDir = dir;
-    } 
+    }
 
     // If there was no explicit baseDir specified in package.json, fallback to convention.
     if (!program.baseDir) {
@@ -414,7 +425,7 @@ module.exports = function(program, done) {
     var indexPageNames = ['index.html', 'index.jade']; //, 'index.haml', ];
     program.indexPage = helper.takeFirstExistsPath(program.baseDir, indexPageNames);
     if (!program.indexPage) {
-      return callback(util.format("Could not find any of the following pages in %s: %s", 
+      return callback(util.format("Could not find any of the following pages in %s: %s",
         program.baseDir, JSON.stringify(indexPageNames)));
     }
     else
@@ -424,7 +435,7 @@ module.exports = function(program, done) {
     if (aerobaticApp.authConfig && aerobaticApp.authConfig.type === 'oauth') {
       program.loginPage = helper.takeFirstExistsPath(program.baseDir, loginPageNames);
       if (!program.loginPage) {
-        return callback(util.format("Apps with oauth enabled require a login page. None of the following pages exist in %s: %s", 
+        return callback(util.format("Apps with oauth enabled require a login page. None of the following pages exist in %s: %s",
           JSON.stringify(loginPageNames), program.baseDir));
       }
       else
