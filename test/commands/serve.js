@@ -55,6 +55,7 @@ describe('serve command', function() {
       apiUrl: "http://localhost:9999",
       port: 4000,
       livereloadPort: 32889,
+      watchMode: 'auto',
       npmScripts: {}
     };
 
@@ -207,7 +208,7 @@ describe('serve command', function() {
           assert.isTrue(self.mockSimulator.called);
 
           done();
-        }, 500);
+        }, 250);
       });
     });
   });
