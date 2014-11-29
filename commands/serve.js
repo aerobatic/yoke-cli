@@ -42,7 +42,6 @@ module.exports = function(program, done) {
       if (err) return cb(err);
 
       // Apps with oauth enabled need to be run in simulator mode.
-      // debugger;
       if (app.authConfig && app.authConfig.type === 'oauth' && program.simulator !== true) {
         return cb("This app has OAuth enabled. Development of this app should happen in simulator mode. Try running 'yoke sim' instead.");
       }
@@ -74,7 +73,6 @@ module.exports = function(program, done) {
     log.debug("Found npm watch script");
     asyncTasks.push(function(cb) {
       spawn('npm', ['run-script', 'watch'], {waitForExit: false}, cb);
-      // buildTool('watch', {cwd: program.cwd, normalizeStdio: true, waitForExit: false}, cb);
     });
   }
 
@@ -107,7 +105,16 @@ module.exports = function(program, done) {
       // TODO: Should we delay starting the watcher briefly to give
       // the grunt or gulp watch initialize to modify some files. Otherwise
       // we could get an immediete livereload refresh.
-      watcher = new Gaze(indexPages, {maxListeners: 100}, function() {
+
+      // Defaulting to poll mode as native was observed to fail silently even
+      // though it is supposed to automatically fallback to polling. Allow
+      // this to be overridden in package.json in the _aerobatic section.
+      var gazeOptions = {
+        maxListeners: 100,
+        mode: program.watchMode === 'auto' ? 'auto' : 'poll'
+      };
+
+      watcher = new Gaze(indexPages, gazeOptions, function() {
         waitForExit();
       });
 
