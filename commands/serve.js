@@ -56,7 +56,7 @@ module.exports = function(program, done) {
   asyncTasks.push(killPortProcesses);
 
   // If serving in release mode, run the build step first.
-  if (program.build === 'release') {
+  if (program.build === 'release' && program.npmScripts.build) {
     asyncTasks.push(function(cb) {
       spawn('npm', ['run-script', 'build'], cb);
     });
