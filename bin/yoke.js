@@ -33,12 +33,12 @@ program
   .action(commandAction('login', {requireCredentials: false, loadNpmConfig: false}));
 
 program 
-  .command('app:create')
+  .command('create-app')
   .description('Create a new Aerobatic app')
   .action(commandAction('appCreate', {loadNpmConfig:false}));
 
 program 
-  .command('app:bind')
+  .command('bind-app')
   .description('Bind the current directory to an existing Aerobatic app')
   .action(commandAction('appBind', {loadNpmConfig:false}));
 
