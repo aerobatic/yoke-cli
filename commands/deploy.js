@@ -36,6 +36,15 @@ module.exports = function(program, done) {
 
   var asyncTasks = [], aerobaticApp, deployFiles, newVersion, skipBuildStep;
 
+  asyncTasks.push(function(cb) {
+    // Call the API to fetch the application.
+    api(program, {path: '/api/apps/' + program.appId}, function(err, app) {
+      if (err) return cb(err);
+      aerobaticApp = app;
+      cb();
+    });
+  });
+
   var runBuildStep = false
   asyncTasks.push(function(cb) {
     collectVersionInputs(cb);
@@ -47,15 +56,6 @@ module.exports = function(program, done) {
       spawn('npm', ['run-script', 'build'], cb);
     });
   }
-
-  asyncTasks.push(function(cb) {
-    // Call the API to fetch the application.
-    api(program, {path: '/api/apps/' + program.appId}, function(err, app) {
-      if (err) return cb(err);
-      aerobaticApp = app;
-      cb();
-    });
-  });
 
   asyncTasks.push(function(cb) {
     gatherDeployFiles(function(err, result) {
@@ -156,8 +156,8 @@ module.exports = function(program, done) {
         versionData.name = getDefaultVersion();
 
       versionData.message = program.message;
-      if (program.cowboy === true)
-        versionData.cowboy = true;
+      if (program.force === true)
+        versionData.force = true;
 
       return callback();
     }
@@ -190,15 +190,21 @@ module.exports = function(program, done) {
       // TODO: Allow organization to disallow this.
       {
         type: 'confirm',
-        name: 'cowboy',
+        name: 'force',
         message: 'Immedietely direct all production traffic to this new version?',
-        default: false
+        default: aerobaticApp.trafficControlEnabled === true ? true : false,
+        when: function(answers) {
+          return aerobaticApp.trafficControlEnabled === true;
+        }
       }
     ];
 
     program.inquirer.prompt(questions, function(answers) {
       runBuildStep = answers.runBuildStep;
-      program.cowboy = answers.cowboy;
+
+      // If trafficControl is not enabled on the app, then always force traffic 
+      // to the new version.
+      program.force = aerobaticApp.trafficControlEnabled !== true ? true : answers.force;
       versionData.name = answers.version;
       versionData.message = answers.message;
 
@@ -303,9 +309,10 @@ module.exports = function(program, done) {
     // Create the new version
     log.info('Creating new version');
 
-    if (program.cowboy === true) {
+    if (program.force === true) {
       versionData.forceAllTrafficToNewVersion = '1';
-      log.info(chalk.yellow('Cowboy mode - forcing all traffic to the new version. Yippee-ki-yay!'));
+      if (aerobaticApp.trafficControlEnabled === true)
+        log.info(chalk.yellow('Forcing all traffic to the new version.'));
     }
 
     var requestOptions = {
