@@ -36,6 +36,7 @@ module.exports = function(program, done) {
 
   var asyncTasks = [], aerobaticApp, deployFiles, newVersion, skipBuildStep;
 
+  var runBuildStep = false
   asyncTasks.push(function(cb) {
     collectVersionInputs(cb);
   });
