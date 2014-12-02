@@ -56,11 +56,12 @@ module.exports = function(program, done) {
   asyncTasks.push(killPortProcesses);
 
   // If serving in release mode, run the build step first.
-  if (program.build === 'release' && program.npmScripts.build) {
-    asyncTasks.push(function(cb) {
+  asyncTasks.push(function(cb) {
+    if (program.build === 'release' && program.npmScripts.build)
       spawn('npm', ['run-script', 'build'], cb);
-    });
-  }
+    else
+      cb();
+  });
 
   if (program.simulator === true) {
     // If this is simulator mode, upload the index pages to the simulator host.
@@ -69,12 +70,14 @@ module.exports = function(program, done) {
     });
   }
 
-  if (program.npmScripts.watch) {
-    log.debug("Found npm watch script");
-    asyncTasks.push(function(cb) {
+  asyncTasks.push(function(cb) {
+    if (program.npmScripts.watch) {
+      log.debug("Found npm watch script");
       spawn('npm', ['run-script', 'watch'], {waitForExit: false}, cb);
-    });
-  }
+    }
+    else
+      cb();
+  });
 
   asyncTasks.push(function(cb) {
     // Start the localhost server
@@ -401,6 +404,9 @@ module.exports = function(program, done) {
       build: 'debug'
     });
 
+    if (program.release === true)
+      program.build = 'release';
+
     // Verify that the build type is valid.
     if (_.contains(['debug', 'release'], program.build) === false) {
       return callback("Invalid build option value. Valid values are 'debug' and 'release'.");
@@ -448,6 +454,8 @@ module.exports = function(program, done) {
       else
         log.debug("Using login page %s", program.loginPage);
     }
+
+    log.debug("options: %s", JSON.stringify(_.pick(program, 'build', 'indexPage', 'loginPage', 'baseDir', 'npmScripts')));
 
     callback();
   }
