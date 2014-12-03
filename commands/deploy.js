@@ -180,7 +180,7 @@ module.exports = function(program, done) {
       },
       {
         type: 'confirm',
-        name: 'runBuild',
+        name: 'runBuildStep',
         message: 'Run "npm run-script build?"',
         when: function() {
           return _.isEmpty(program.npmScripts.build) === false;
