@@ -45,7 +45,7 @@ module.exports = function(program, done) {
     });
   });
 
-  var runBuildStep = false
+  var runBuildStep = false;
   asyncTasks.push(function(cb) {
     collectVersionInputs(cb);
   });
