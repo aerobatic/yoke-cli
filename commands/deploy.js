@@ -10,6 +10,7 @@ var path = require('path');
 var glob = require("glob");
 var open = require('open');
 var shortid = require('shortid');
+var spawn = require('../lib/spawn');
 var api = require('../lib/api');
 var log = require('../lib/log');
 var buildTool = require('../lib/buildTool');
@@ -50,12 +51,13 @@ module.exports = function(program, done) {
     collectVersionInputs(cb);
   });
 
-  if (runBuildStep === true) {
-    // Run "npm run-script build"
-    asyncTasks.push(function(cb) {
+  // Run "npm run-script build"
+  asyncTasks.push(function(cb) {
+    if (runBuildStep === true)
       spawn('npm', ['run-script', 'build'], cb);
-    });
-  }
+    else
+      cb();
+  });
 
   asyncTasks.push(function(cb) {
     gatherDeployFiles(function(err, result) {
