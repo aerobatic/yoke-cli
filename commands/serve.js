@@ -162,8 +162,8 @@ module.exports = function(program, done) {
       var assetUrlPath;
       if (filePath === program.indexPage)
         assetUrlPath = '/';
-      else if (_.contains(watchedFiles, filePath))
-        assetUrlPath = path.relative(program.baseDir, filePath);
+      else if (watchedFiles[filePath])
+        assetUrlPath = watchedFiles[filePath];
 
       if (assetUrlPath) {
         //TODO: What if several files all changed at once.. We should buffer
@@ -242,6 +242,8 @@ module.exports = function(program, done) {
     });
 
     localhost.use(function(req, res, next) {
+      log.debug("Request for %s", req.path);
+      
       onFinished(res, function() {
         if (res.statusCode === 500)
           return done("Cannot use the proxy in localhost mode. Run 'yoke sim' instead.");
@@ -265,13 +267,24 @@ module.exports = function(program, done) {
         var assetPath;
         if (req.indexPage)
           assetPath = program.indexPage;
-        else
-          assetPath = path.join(program.baseDir, req.path);
+        else {
+          var pathSplit = req.path.split('.');
+          // Slice off all but the first extension. An additional extension can be added 
+          // to certain filetype so the browser sees them with the expected extension but
+          // the actual filename does not include it, i.e. styles.styl.css.
+          var filePath;
+          if (pathSplit.length > 2 && preprocessors[pathSplit[1]])
+            filePath = pathSplit.splice(0, 2).join('.');
+          else
+            filePath = req.path;
 
-        if (_.contains(watchedFiles, assetPath) === false) {
+          assetPath = path.join(program.baseDir, filePath);
+        }
+
+        if (!watchedFiles[assetPath]) {
           watcher.add([assetPath], function() {
             log.debug("Added watch to file %s", assetPath);
-            watchedFiles.push(assetPath);
+            watchedFiles[assetPath] = req.path;
             next();
           });
         }
@@ -319,26 +332,27 @@ module.exports = function(program, done) {
 
     localhost.use(function(req, res, next) {
       // Check if the request is for a file extension that has a pre-processor configured
-      var lastDotIndex = req.path.lastIndexOf('.');
-      if (lastDotIndex === -1)
+      // The path will look like styles.styl.css
+      var pathSplit = req.path.split('.');
+      if (pathSplit.length === 1)
         return next();
 
-      var extname = req.path.substr(lastDotIndex+1);
-      if (preprocessors[extname]) {
-        var filePath = path.join(program.baseDir, req.path);
-        log.debug("Running preprocessor %s on file %s", extname, filePath);
-        preprocessors[extname](filePath, function(err, result) {
-          if (err) {
-            log.error(err.message);
-            return res.status(500).send(err.message);
-          }
+      var extname = pathSplit[1];
+      var preProcessor = preprocessors[extname];
+      if (!preProcessor)
+        return next();
 
-          res.set('Content-Type', result.contentType);
-          return res.send(result.output);
-        });
-      }
-      else
-        next();
+      var filePath = path.join(program.baseDir, pathSplit[0] + '.' + extname);
+      log.debug("Running preprocessor %s on file %s", extname, filePath);
+      preProcessor(filePath, function(err, result) {
+        if (err) {
+          log.error(err.message);
+          return res.status(500).send(err.message);
+        }
+
+        res.set('Content-Type', result.contentType);
+        return res.send(result.output);
+      });
     });
 
     localhost.use(express.static(program.baseDir, {index: false}));
@@ -445,11 +459,11 @@ module.exports = function(program, done) {
       log.debug("Using index page %s", program.indexPage);
 
     var loginPageNames = ['login.html', 'login.jade'];
-    if (aerobaticApp.authConfig && _.isString(aerobaticApp.authConfig.type)) {
+    if (aerobaticApp.authConfig && _.contains(['oauth', 'parse'], aerobaticApp.authConfig.type)) {
       program.loginPage = helper.takeFirstExistsPath(program.baseDir, loginPageNames);
       if (!program.loginPage) {
-        return callback(util.format("Apps with oauth enabled require a login page. None of the following pages exist in %s: %s",
-          JSON.stringify(loginPageNames), program.baseDir));
+        return callback(util.format("Apps with %s enabled require a login page. None of the following pages exist in %s: %s",
+          aerobaticApp.authConfig.type, JSON.stringify(loginPageNames), program.baseDir));
       }
       else
         log.debug("Using login page %s", program.loginPage);
