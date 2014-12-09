@@ -444,8 +444,8 @@ module.exports = function(program, done) {
     else
       log.debug("Using index page %s", program.indexPage);
 
-    var loginPageNames = ['login.html']; //, 'login.haml', 'login.jade'];
-    if (aerobaticApp.authConfig && aerobaticApp.authConfig.type === 'oauth') {
+    var loginPageNames = ['login.html', 'login.jade'];
+    if (aerobaticApp.authConfig && _.isString(aerobaticApp.authConfig.type)) {
       program.loginPage = helper.takeFirstExistsPath(program.baseDir, loginPageNames);
       if (!program.loginPage) {
         return callback(util.format("Apps with oauth enabled require a login page. None of the following pages exist in %s: %s",
