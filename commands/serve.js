@@ -52,16 +52,18 @@ module.exports = function(program, done) {
   });
 
   asyncTasks.push(setDefaults);
-
   asyncTasks.push(killPortProcesses);
 
   // If serving in release mode, run the build step first.
   asyncTasks.push(function(cb) {
     if (program.build === 'release' && program.npmScripts.build)
+
       spawn('npm', ['run-script', 'build'], cb);
     else
       cb();
   });
+
+  asyncTasks.push(verifyIndexPages);
 
   if (program.simulator === true) {
     // If this is simulator mode, upload the index pages to the simulator host.
@@ -82,10 +84,12 @@ module.exports = function(program, done) {
   asyncTasks.push(function(cb) {
     // Start the localhost server
     startLocalServer(function(localhostUrl) {
-      log.info("App running at %s", localhostUrl);
-
-      if (program.simulator === true)
+      if (program.simulator === true) {
         simulatorUrl = buildSimulatorUrl();
+        log.info("App running at %s", simulatorUrl);        
+      }
+      else
+        log.info("App running at %s", localhostUrl);
 
       // Open a browser tab with the localhost URL
       if (program.open)
@@ -192,6 +196,8 @@ module.exports = function(program, done) {
       var extname = path.extname(pagePath);
       var pageName = path.basename(pagePath, extname);
 
+      log.debug("Uploading index page %s to simulator", pagePath);
+
       // If this extension has a pre-processor registered, perform preprocessing first.
       preProcessor = preprocessors[extname.substr(1)];
       if (preProcessor) {
@@ -243,7 +249,7 @@ module.exports = function(program, done) {
 
     localhost.use(function(req, res, next) {
       log.debug("Request for %s", req.path);
-      
+
       onFinished(res, function() {
         if (res.statusCode === 500)
           return done("Cannot use the proxy in localhost mode. Run 'yoke sim' instead.");
@@ -426,6 +432,10 @@ module.exports = function(program, done) {
       return callback("Invalid build option value. Valid values are 'debug' and 'release'.");
     }
 
+    callback();
+  }
+
+  function verifyIndexPages(callback) {
     // If an explicit baseDir was specified for the current build type, ensure it exists.
     if (_.isObject(program.baseDirs) && !_.isEmpty(program.baseDirs[program.build])) {
       var dir = path.join(program.cwd, program.baseDirs[program.build]);
@@ -468,10 +478,8 @@ module.exports = function(program, done) {
       else
         log.debug("Using login page %s", program.loginPage);
     }
-
-    log.debug("options: %s", JSON.stringify(_.pick(program, 'build', 'indexPage', 'loginPage', 'baseDir', 'npmScripts')));
-
-    callback();
+    
+    callback(null);
   }
 
   // Build the URL to the simulator host
