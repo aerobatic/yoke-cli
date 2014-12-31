@@ -58,7 +58,7 @@ module.exports = function(program, done) {
         type: 'password',
         name: 'secretKey',
         validate: function(input) {
-          if (/^[a-z0-9]+$/i.test(input) === false)
+          if (/^[a-z0-9_]+$/i.test(input) === false)
             return 'Value contains invalid characters.';
           else if (input.length !== 32)
             return 'Value is ' + input.length + ' characters long. Must be 32 characters.';
