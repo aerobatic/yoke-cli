@@ -258,7 +258,8 @@ module.exports = function(program, done) {
 
   function shouldCompress(filePath) {
     // Don't compress any of the pages that are served from the app platform rather than the CDN.
-    if (filePath == 'index.html' || filePath == 'login.html') {
+    var platformFiles = ['index.html', 'login.html', 'robots.txt', 'sitemap.xml'];
+    if (_.contains(platformFiles, filePath) === true) {
       log.debug("Do not compress file %s", filePath);
       return false;
     }
