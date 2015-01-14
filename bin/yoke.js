@@ -56,8 +56,8 @@ program
   .action(commandAction('serve', {simulator: true}));
 
 program
-  .option('-u, --unattended', 'Run in unattended mode')
-  .option('-v, --version [version]', 'Version name')
+  .option('-x, --unattended', 'Run in unattended mode')
+  .option('-n, --name [name]', 'Version name')
   .option('-m, --message [message]', 'Version message')
   .command('deploy')
   .description('Deploy a new version of the app')

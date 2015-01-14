@@ -147,12 +147,15 @@ module.exports = function(program, done) {
   function collectVersionInputs(callback) {
     // Perform an unattended deployment, possibly from a CI process.
     if (program.unattended === true) {
+      log.debug("Running in unattended mode");
       // Assuming that a CI process would have already run the build step.
       runBuildStep = false;
-      if (_.isEmpty(program.version)) {
-        var versionNameError = validateVersionName(program.version);
+      if (_.isEmpty(program.name === false)) {
+        var versionNameError = validateVersionName(program.name);
         if (_.isString(versionNameError))
           return callback(versionNameError);
+
+        versionData.name = program.name;
       }
       else
         versionData.name = getDefaultVersion();
