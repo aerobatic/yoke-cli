@@ -57,7 +57,7 @@ program
 
 program
   .option('-x, --unattended', 'Run in unattended mode')
-  .option('-n, --name [name]', 'Version name')
+  .option('--version-name [versionName]', 'Version name')
   .option('-m, --message [message]', 'Version message')
   .command('deploy')
   .description('Deploy a new version of the app')

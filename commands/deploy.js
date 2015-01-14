@@ -150,12 +150,12 @@ module.exports = function(program, done) {
       log.debug("Running in unattended mode");
       // Assuming that a CI process would have already run the build step.
       runBuildStep = false;
-      if (_.isEmpty(program.name === false)) {
-        var versionNameError = validateVersionName(program.name);
+      if (_.isEmpty(program.versionName) === false) {
+        var versionNameError = validateVersionName(program.versionName);
         if (_.isString(versionNameError))
           return callback(versionNameError);
 
-        versionData.name = program.name;
+        versionData.name = program.versionName;
       }
       else
         versionData.name = getDefaultVersion();
