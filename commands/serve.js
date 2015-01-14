@@ -17,7 +17,6 @@ var onFinished = require('on-finished');
 var chalk = require('chalk');
 var spawn = require('../lib/spawn');
 var bodyParser = require('body-parser');
-var processFinder = require('process-finder');
 var api = require('../lib/api');
 var helper = require('../lib/helper');
 var indexPage = require('../lib/indexPage');
@@ -52,7 +51,6 @@ module.exports = function(program, done) {
   });
 
   asyncTasks.push(setDefaults);
-  asyncTasks.push(killPortProcesses);
 
   // If serving in release mode, run the build step first.
   asyncTasks.push(function(cb) {
@@ -399,17 +397,6 @@ module.exports = function(program, done) {
         callback(url);
       });
     }
-  }
-
-  function killPortProcesses(callback) {
-    async.each([program.port, program.livereloadPort], function(port, cb) {
-      processFinder.find(port, function(err, pids) {
-        if (err) return cb(err);
-        log.info("Killing process on port %s", port);
-        pids.forEach(process.kill);
-        cb();
-      });
-    }, callback);
   }
 
   function setDefaults(callback) {
