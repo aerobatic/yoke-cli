@@ -89,7 +89,7 @@ function commandAction(name, options) {
 
     // If login is required to run this command and the user and key were 
     // not passed in as arguments, then look up the .aerobatic file.
-    if (program.requireCredentials === true && !(program.user && program.key)) {
+    if (program.requireCredentials === true && !(program.userId && program.secretKey)) {
       initTasks.credentials = loadCredentials;
     }
 
