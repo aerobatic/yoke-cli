@@ -7,6 +7,7 @@ var async = require('async');
 var log = require('../lib/log');
 var http = require('http');
 var https = require('https');
+var cheerio = require('cheerio');
 var openBrowser = require('open');
 var path = require('path');
 var fs = require('fs');
@@ -18,6 +19,7 @@ var chalk = require('chalk');
 var spawn = require('../lib/spawn');
 var bodyParser = require('body-parser');
 var api = require('../lib/api');
+var glob = require('glob');
 var helper = require('../lib/helper');
 var indexPage = require('../lib/indexPage');
 var preprocessors = require('../lib/preprocessors');
@@ -196,29 +198,77 @@ module.exports = function(program, done) {
 
       log.debug("Uploading index page %s to simulator", pagePath);
 
-      // If this extension has a pre-processor registered, perform preprocessing first.
-      preProcessor = preprocessors[extname.substr(1)];
-      if (preProcessor) {
-        preProcessor(pagePath, function(err, result) {
+      // If this extension has a pre-processor registered, perform preprocessing first. If there
+      // is no pre-process, then just read the actual file contents.
+      preProcessor = preprocessors[extname.substr(1)] || fs.readFile;
+
+      preProcessor(pagePath, function(err, result) {
+        if (err) return cb(err);
+
+        if (result.output)
+          html = result.output;
+        else
+          html = result;
+
+        // Expand any patterns in the index page
+        log.debug("Expand pattern srcs for %s", pagePath);
+        expandPatternSrcs(html, function(err, finalHtml) {
           if (err) return cb(err);
 
           //HACK: Write the .html file to disk. Can't seem to mimic a read stream from a string.
           var tempFile = path.join(osenv.tmpdir(), new Date().getTime() + '.html');
-          fs.writeFile(tempFile, result.output, function(err) {
+          fs.writeFile(tempFile, finalHtml, function(err) {
             if (err) return cb(err);
 
             requestOptions.formData[pageName] = fs.createReadStream(tempFile);
             cb(null);
           });
         });
-      }
-      else {
-        requestOptions.formData[pageName] = fs.createReadStream(pagePath);
-        cb(null);
-      }
+      });
     }, function(err, formValues) {
       if (err) return callback(err);
       api(program, requestOptions, callback);
+    });
+  }
+
+  function expandPatternSrcs(html, callback) {
+    var $;
+    try {
+      $ = cheerio.load(html, {recognizeSelfClosing: true});
+    }
+    catch (err) {
+      return callback(new Error("Invalid index document: " + err.message));
+    }
+
+    var elementsToExpand = $('[data-aero-src]').toArray();
+    log.debug("Found %s data-aero-src elements", elementsToExpand.length);
+    async.each(elementsToExpand, function(elem, cb) {
+      elem = $(elem);
+      var globPattern = elem.attr("data-aero-src");
+
+      glob(globPattern, {
+        cwd: program.baseDir,
+        nonull: true,
+        nodir: true
+      }, function(err, matches) {
+        if (err) return cb(err);
+
+        var lastElement = elem;
+        _.each(matches, function(match) {
+          var clonedElem = elem.clone();
+          clonedElem.removeAttr("data-aero-src");
+          clonedElem.attr("src", match.replace('\\', '/'));
+          lastElement.after(clonedElem);
+          lastElement = clonedElem;
+        });
+
+        // Remove the original element
+        elem.remove();
+        cb();
+      });
+    }, function(err) {
+      if (err) return callback(err);
+      callback(null, $.root().html());
     });
   }
 
