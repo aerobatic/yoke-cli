@@ -161,9 +161,7 @@ module.exports = function(program, done) {
         versionData.name = getDefaultVersion();
 
       versionData.message = program.message;
-      if (program.force === true)
-        versionData.force = true;
-
+      
       return callback();
     }
 
@@ -315,7 +313,7 @@ module.exports = function(program, done) {
     // Create the new version
     log.info('Creating new version');
 
-    if (program.force === true) {
+    if (program.force === true) {      
       versionData.forceAllTrafficToNewVersion = '1';
       if (aerobaticApp.trafficControlEnabled === true)
         log.info(chalk.yellow('Forcing all traffic to the new version.'));

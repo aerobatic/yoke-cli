@@ -59,6 +59,7 @@ program
   .option('-x, --unattended', 'Run in unattended mode')
   .option('--version-name [versionName]', 'Version name')
   .option('-m, --message [message]', 'Version message')
+  .option('-f, --force', 'Force all production traffic to the new version')
   .command('deploy')
   .description('Deploy a new version of the app')
   .action(commandAction('deploy'));
