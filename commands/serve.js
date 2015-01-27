@@ -29,7 +29,7 @@ module.exports = function(program, done) {
   var aerobaticApp, watcher, localhostServer, liveReloadServer, watchedFiles = [], simulatorUrl;
 
   if (program.simulator === true)
-    log.messageBox("Run a local server for assets while index page runs on simulator host.\nPress Ctrl+C to quit.");
+    log.messageBox("Run a local server for assets while index page runs\non simulator host. Press Ctrl+C to quit.");
   else {
     program.simulator = false;
     log.messageBox("Run a full localhost server.\nPress Ctrl+C to quit.");

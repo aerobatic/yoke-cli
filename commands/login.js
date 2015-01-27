@@ -70,7 +70,7 @@ module.exports = function(program, done) {
     ];
 
     log.messageBox(['Login to Aerobatic',
-      'You can access your userId and secretKey on your profile page:',
+      'Access your userId and secretKey on your profile page:',
       'https://portal.aerobaticapp.com/profile']);
 
     inquirer.prompt(questions, function(answers) {
