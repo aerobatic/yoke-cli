@@ -6,6 +6,11 @@ assert.isUUID = function(val) {
     throw new assert.AssertionError({message: val + " is not a valid UUID"});
 }
 
+assert.isEqual = function(val, test) {
+  if (_.isEqual(val, test) === false)
+    throw new assert.AssertionError("Objects are not equal");
+};
+
 assert.isTrue = function(val) {
   assert.equal(val, true);
 };

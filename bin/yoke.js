@@ -24,6 +24,7 @@ program.version(require('../package.json').version)
   .option('-d, --debug', 'Emit debug messages')
   .option('-u, --userId [userId]', 'User id. If not provided the credentials in the .aerobatic file are used')
   .option('-k, --secretKey [secretKey]', 'User secret key')
+  .option('-p, --port [portNumber]', 'Port number to listen on')
   .option('--dev', 'Run yoke against the development environment')
   .option('--offline', 'Indicate that your are offline')
 
@@ -33,6 +34,8 @@ program
   .action(commandAction('login', {requireCredentials: false, loadNpmConfig: false}));
 
 program 
+  .option('--github-repo [repo]', 'GitHub repo to scaffold a new app from. Specify owner/repoName')
+  .option('--github-branch [branch]', 'GitHub branch (only relevant if github-repo specified)')
   .command('create-app')
   .description('Create a new Aerobatic app')
   .action(commandAction('appCreate', {loadNpmConfig:false}));

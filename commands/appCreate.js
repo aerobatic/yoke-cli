@@ -10,13 +10,21 @@ var spawn = require('../lib/spawn');
 var api = require('../lib/api');
 var log = require('../lib/log');
 var npmConfig = require('../lib/npmConfig');
+var helper = require('../lib/helper');
 
 require("simple-errors");
 
 module.exports = function(program, done) {
+  if (program.githubRepo) {
+    program.githubRepo = helper.parseGithubRepo(program.githubRepo);
+    if (program.githubRepo === false) {
+      return done("Invalid github-repo option");
+    }
+  }
+
   program = _.defaults(program || {}, {
     templatesUrl: 'https://raw.githubusercontent.com/aerobatic/markdown-content/master/metadata/appTemplates.json',
-    gitHubUrl: 'https://github.com',
+    githubUrl: 'https://github.com',
     inquirer: require('inquirer'),
     baseDir: process.cwd()
   });
@@ -34,7 +42,7 @@ module.exports = function(program, done) {
         "directory where your existing app code resides.");
 
     var tasks = [], appDir;
-    if (answers.startingMode === 'scratch') {
+    if (answers.startingMode === 'scratch' || program.githubRepo) {
       // Create a new directory corresponding to the app name
       appDir = path.join(program.baseDir, answers.appName);
       tasks.push(function(cb) {
@@ -48,18 +56,27 @@ module.exports = function(program, done) {
     log.debug("Setting appDir to %s", appDir);
 
     if (answers.template) {
-      tasks.push(function(cb) {
-        unpackTemplate(answers.template, answers.buildTool, appDir, cb);
-      });
+      var branch;
+      if (answers.buildTool)
+        branch = answers.buildTool + '-yoke';
 
       tasks.push(function(cb) {
-        npmInstall(appDir, cb);
-      });
-
-      tasks.push(function(cb) {
-        bowerInstall(appDir, cb);
+        unpackTemplate(answers.template.githubRepo, branch, appDir, cb);  
       });
     }
+    else if (program.githubRepo) {
+      tasks.push(function(cb) {
+        unpackTemplate(program.githubRepo, program.githubBranch, appDir, cb);  
+      }); 
+    }
+
+    tasks.push(function(cb) {
+      npmInstall(appDir, cb);
+    });
+
+    tasks.push(function(cb) {
+      bowerInstall(appDir, cb);
+    });
 
     var createdApp = null;
     // Call the API to create the app.
@@ -79,7 +96,17 @@ module.exports = function(program, done) {
     async.series(tasks, function(err) {
       if (err) return done(err);
 
-      log.success("App %s has been created", answers.appName);
+      log.success("App created at %s", createdApp.url);
+      log.info("Ready to launch the dev simulator and start coding!");
+
+      if (answers.existing === true) {
+        log.info("Run: " + chalk.cyan(chalk.underline("yoke sim -o")));
+      }
+      else {
+        log.info("Switch to your new app directory: " + chalk.cyan(chalk.underline("cd " + answers.appName)));
+        log.info("Then run: " + chalk.cyan(chalk.underline("yoke sim -o")));
+      }
+
       done(null, createdApp);
     });
   });
@@ -104,7 +131,15 @@ module.exports = function(program, done) {
     request(program.templatesUrl, function(err, resp, body) {
       if (err) return callback(err);
 
-      callback(null, JSON.parse(body).templates);
+      var templates = JSON.parse(body).templates;
+      _.each(templates, function(template) {
+        // HACK: Get rid of this eventually
+        // Normalize to githubRepo with lowercase "h". 
+        template.githubRepo = template.gitHubRepo;
+        delete template.gitHubRepo;
+      });
+
+      callback(null, templates);
     });
   }
 
@@ -143,6 +178,11 @@ module.exports = function(program, done) {
         {name:'Existing code', value:'existing'}
       ],
       default: null,
+      when: function() {
+        // If a GitHub repo was passed in from the command line we are 
+        // by definition starting from scratch.
+        return !program.githubRepo;
+      },
       message: "Are you starting this app from existing code or from scratch?"
     });
 
@@ -233,6 +273,10 @@ module.exports = function(program, done) {
         return callback("No package.json file exists in app directory");
       }
 
+      // If th node_modules directory already exists, assume npm install already run
+      if (fs.exists(path.join(appDir, 'node_modules')))
+        return callback();
+
       log.info("Installing npm dependencies in %s", appDir);
       spawn('npm', ['install'], {cwd: appDir, inheritStdio: true}, callback);
     });
@@ -250,16 +294,13 @@ module.exports = function(program, done) {
     });
   }
 
-  function unpackTemplate(template, buildTool, appDir, callback) {
-    var buildTool;
-    if (buildTool)
-      branch = buildTool + '-yoke';
-    else
-      branch = 'master';
+  function unpackTemplate(githubRepo, githubBranch, appDir, callback) {
+    if (_.isEmpty(githubBranch) === true)
+      githubBranch = 'master';
 
     // Download, unzip, and extract the template from GitHub repo.
-    var archiveUrl = program.gitHubUrl + '/' + template.gitHubRepo + '/archive/' + branch + '.tar.gz';
-    log.info("Unpacking template %s to %s", archiveUrl, appDir);
+    var archiveUrl = program.githubUrl + '/' + githubRepo + '/archive/' + githubBranch + '.tar.gz';
+    log.info("Unpacking template %s", archiveUrl);
 
     request(archiveUrl)
       .pipe(zlib.createGunzip())
@@ -286,9 +327,9 @@ module.exports = function(program, done) {
 
     log.info("Invoking Aerobatic API to create app");
     var request = api(program, options, function(err, app) {
-      if (err) return callback(Error.create("Error invoking Aerobatic API to create the app", {}, err));
+      if (err) return callback(Error.create("Error invoking Aerobatic API: " + JSON.stringify(err)));
 
-      log.success("App created at %s", app.url);
+      log.debug("api post to /api/apps succeeded");
       callback(null, app);
     });
   }
