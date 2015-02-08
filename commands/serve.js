@@ -54,6 +54,14 @@ module.exports = function(program, done) {
 
   asyncTasks.push(setDefaults);
 
+  asyncTasks.push(function(cb) {
+    // If there is an _init script in package.json, run it.
+    if (program.build === 'debug' && program.npmScripts._init)
+      spawn('npm', ['run-script', '_init'], cb);
+    else
+      cb();
+  });
+
   // If serving in release mode, run the build step first.
   asyncTasks.push(function(cb) {
     if (program.build === 'release' && program.npmScripts.build)
@@ -405,7 +413,10 @@ module.exports = function(program, done) {
         }
 
         res.set('Content-Type', result.contentType);
-        return res.send(result.output);
+        if (_.isString(result.output))
+          return res.send(result.output);
+        else
+          result.output.pipe(res);
       });
     });
 
