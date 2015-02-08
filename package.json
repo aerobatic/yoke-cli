@@ -1,6 +1,6 @@
 {
   "name": "yoke-cli",
-  "version": "0.0.29",
+  "version": "0.0.31",
   "description": "Command line interface for building and deploying Aerobatic apps",
   "bin": {
     "yoke": "bin/yoke.js"
@@ -22,7 +22,6 @@
   "dependencies": {
     "async": "^0.9.0",
     "body-parser": "^1.9.2",
-    "browserify": "^8.1.1",
     "chalk": "^0.5.1",
     "cheerio": "^0.18.0",
     "cmdify": "0.0.4",
@@ -36,12 +35,10 @@
     "lodash": "^2.4.1",
     "minimatch": "^2.0.1",
     "nib": "^1.0.4",
-    "node-sass": "^1.2.3",
     "on-finished": "^2.1.1",
     "open": "0.0.5",
     "osenv": "^0.1.0",
     "printf": "^0.2.0",
-    "reactify": "^1.0.0",
     "request": "^2.47.0",
     "rimraf": "^2.2.8",
     "shortid": "^2.1.3",
