@@ -200,7 +200,7 @@ function loadAerobaticNpmConfig(callback) {
       var aerobaticConfig = json._aerobatic;
 
       if (!aerobaticConfig.appId)
-        return callback("Missing appId in _aerobatic section of package.json. Try re-running the command 'yoke app:bind'.")
+        return callback("Missing appId in _aerobatic section of package.json. Try re-running the command 'yoke bind-app'.")
 
       // Copy certain NPM standard attributes to the _aerobatic section.
       _.extend(aerobaticConfig, {

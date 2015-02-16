@@ -21,6 +21,7 @@ var bodyParser = require('body-parser');
 var api = require('../lib/api');
 var glob = require('glob');
 var helper = require('../lib/helper');
+var querystring = require('querystring');
 var indexPage = require('../lib/indexPage');
 var preprocessors = require('../lib/preprocessors');
 var Gaze = require('gaze').Gaze;
@@ -38,9 +39,13 @@ module.exports = function(program, done) {
   var asyncTasks = [];
   asyncTasks.push(function(cb) {
     // Fetch the app from the API so we have access to the env variables.
-    log.info("Fetching app info from Aerobatic API");
+    log.info("invoke api to fetch app %s", program.appId);
     api(program, {method: 'GET', path: '/api/apps/' + program.appId}, function(err, app) {
       if (err) return cb(err);
+
+      if (!app) {
+        return cb("Application " + program.appId + " could not be found");
+      }
 
       // Apps with oauth enabled need to be run in simulator mode.
       if (app.authConfig && app.authConfig.type === 'oauth' && program.simulator !== true) {
@@ -55,7 +60,7 @@ module.exports = function(program, done) {
   asyncTasks.push(setDefaults);
 
   asyncTasks.push(function(cb) {
-    // If there is an _init script in package.json, run it.
+    // If there is an _init script in package.json, run it
     if (program.build === 'debug' && program.npmScripts._init)
       spawn('npm', ['run-script', '_init'], cb);
     else
@@ -111,7 +116,7 @@ module.exports = function(program, done) {
     if (err)
       return done(err);
 
-    if (program.livereload) {
+    if (program.liveReload) {
       log.debug("Starting watcher for file changes");
 
       var indexPages = _.compact([program.indexPage, program.loginPage]);
@@ -152,7 +157,7 @@ module.exports = function(program, done) {
         localhostServer.close();
       }
       if (liveReloadServer) {
-        log.debug("Closing livereload server");
+        log.debug("Closing LiveReload server");
         liveReloadServer.close();
       }
     });
@@ -183,7 +188,7 @@ module.exports = function(program, done) {
         program.lastFileChanges = [filePath];
 
         // if (program.simulator === true)
-        log.info("Livereload triggered by change to %s", assetUrlPath);
+        log.info("LiveReload triggered by change to %s", assetUrlPath);
         tinylr.changed(assetUrlPath);
       }
     }
@@ -261,8 +266,12 @@ module.exports = function(program, done) {
       }, function(err, matches) {
         if (err) return cb(err);
 
+        log.debug("Found %s matches for src pattern %s", matches.length, globPattern);
+
         var lastElement = elem;
         _.each(matches, function(match) {
+          log.debug("Injecting match %s", match);
+
           var clonedElem = elem.clone();
           clonedElem.removeAttr("data-aero-src");
           clonedElem.attr("src", match.replace('\\', '/'));
@@ -324,7 +333,7 @@ module.exports = function(program, done) {
       req.vendorAsset = /^\/(node_modules|bower_components)\//.test(req.path) === true;
 
       // Make sure the path is in the list of files to watch.
-      if (program.livereload && !req.vendorAsset) {
+      if (program.liveReload && !req.vendorAsset) {
         // Watch any file that is requested by the page.
         var assetPath;
         if (req.indexPage)
@@ -423,16 +432,16 @@ module.exports = function(program, done) {
     localhost.use(express.static(program.baseDir, {index: false}));
 
     // Create the livereload server
-    if (program.livereload) {
-      log.debug("Creating livereload server");
+    if (program.liveReload) {
+      log.debug("Creating LiveReload server");
 
       var liveReloadOptions = _.extend(httpsOptions, {liveCSS: true, liveImg: true});
       liveReloadServer = tinylr(liveReloadOptions);
 
       // Make sure to call listen on a new line rather than chain it to the factory function
       // since the listen function does not return the server reference.
-      liveReloadServer.listen(program.livereloadPort, function() {
-        log.info("Livereload listening on port %s", program.livereloadPort);
+      liveReloadServer.listen(program.liveReloadPort, function() {
+        log.info("LiveReload listening on port %s", program.liveReloadPort);
       });
     }
 
@@ -463,10 +472,10 @@ module.exports = function(program, done) {
   function setDefaults(callback) {
     _.defaults(program, {
       port: 3000,
-      livereload: true,
+      liveReload: true,
       // Intentionally not using standard livereload port to avoid collisions if
       // the app is also using a browser livereload plugin.
-      livereloadPort: 35728,
+      liveReloadPort: 35728,
       cwd: process.cwd(),
       baseDirs: {},
       build: 'debug'
@@ -532,13 +541,30 @@ module.exports = function(program, done) {
 
   // Build the URL to the simulator host
   function buildSimulatorUrl() {
-    var url = aerobaticApp.url + '?sim=1&port=' + program.port + '&user=' + program.userId;
-    if (program.livereload === true)
-      url += '&reload=1&lrport=' + program.livereloadPort;
+    var devOptions = {
+      buildType: program.build,
+      user: program.userId,
+      port: program.port || 3000
+    };
 
-    if (program.build === 'release')
-      url += '&release=1';
+    if (program.liveReload) {
+      devOptions.liveReload = 1;
+      devOptions.liveReloadPort = program.liveReloadPort;
+    }
 
-    return url;
+    var proto;
+    if (aerobaticApp.requireSsl === true)
+      proto = 'https';
+    else
+      proto = 'http';
+
+    // Inject the ".dev" portion into the hostname
+    var host;
+    if (program.dev === true)
+      host = 'aerobaticapp.dev';
+    else
+      host = 'aerobaticapp.com';
+
+    return proto + '://' + aerobaticApp.name + '--dev.' + host + '?_dev=' + encodeURIComponent(querystring.stringify(devOptions));
   }
 };

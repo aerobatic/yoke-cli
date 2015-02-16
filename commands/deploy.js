@@ -194,7 +194,7 @@ module.exports = function(program, done) {
       {
         type: 'confirm',
         name: 'force',
-        message: 'Immedietely direct all production traffic to this new version?',
+        message: 'Immediately direct all production traffic to this new version?',
         default: aerobaticApp.trafficControlEnabled === true ? true : false,
         when: function(answers) {
           return aerobaticApp.trafficControlEnabled === true;
