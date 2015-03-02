@@ -15,7 +15,7 @@ var pkg = require('../package.json');
 require('simple-errors');
 
 updateNotifier({
-  packageName: pkg.name, 
+  packageName: pkg.name,
   packageVersion: pkg.version,
   updateCheckInterval: 1000 * 60 * 60 * 2 // Check for updates every 2 hours
 }).notify();
@@ -28,19 +28,19 @@ program.version(require('../package.json').version)
   .option('--dev', 'Run yoke against the development environment')
   .option('--offline', 'Indicate that your are offline')
 
-program 
+program
   .command('login')
   .description("Write the login credentials")
   .action(commandAction('login', {requireCredentials: false, loadNpmConfig: false}));
 
-program 
+program
   .option('--github-repo [repo]', 'GitHub repo to scaffold a new app from. Specify owner/repoName')
   .option('--github-branch [branch]', 'GitHub branch (only relevant if github-repo specified)')
   .command('create-app')
   .description('Create a new Aerobatic app')
   .action(commandAction('appCreate', {loadNpmConfig:false}));
 
-program 
+program
   .command('bind-app')
   .description('Bind the current directory to an existing Aerobatic app')
   .action(commandAction('appBind', {loadNpmConfig:false}));
@@ -63,6 +63,7 @@ program
   .option('--version-name [versionName]', 'Version name')
   .option('-m, --message [message]', 'Version message')
   .option('-f, --force', 'Force all production traffic to the new version')
+  .option('--appId [appId]', 'Set appId (in place of the one defined in package.json')
   .command('deploy')
   .description('Deploy a new version of the app')
   .action(commandAction('deploy'));
@@ -86,12 +87,12 @@ function commandAction(name, options) {
   return function() {
     _.extend(program, _.defaults(options || {}, {
       requireCredentials: true,
-      loadNpmConfig: true  
+      loadNpmConfig: true
     }));
 
     var initTasks = {};
 
-    // If login is required to run this command and the user and key were 
+    // If login is required to run this command and the user and key were
     // not passed in as arguments, then look up the .aerobatic file.
     if (program.requireCredentials === true && !(program.userId && program.secretKey)) {
       initTasks.credentials = loadCredentials;
@@ -167,7 +168,7 @@ function loadCredentials(callback) {
     catch (e) {
       return callback("Could not parse .aerobatic file JSON. Try re-running 'yoke login'");
     }
-  
+
     if (_.isEmpty(credentials.userId) || _.isEmpty(credentials.secretKey))
       return callback("Missing information in .aerobatic file. Try re-running 'yoke login'");
 
@@ -192,15 +193,19 @@ function loadAerobaticNpmConfig(callback) {
       }
       catch (e) {
         return callback("File " + packageJsonPath + " is not valid JSON");
-      }      
+      }
 
       if (!json._aerobatic)
         return callback("Missing _aerobatic section in package.json file. Try re-running the command 'yoke app:bind'.");
 
       var aerobaticConfig = json._aerobatic;
 
-      if (!aerobaticConfig.appId)
-        return callback("Missing appId in _aerobatic section of package.json. Try re-running the command 'yoke bind-app'.")
+      if (!program.appId && !aerobaticConfig.appId)
+        return callback("Missing appId in _aerobatic section of package.json. Try re-running the command 'yoke bind-app'.");
+
+      if (program.appId) {
+        aerobaticConfig.appId = program.appId;
+      }
 
       // Copy certain NPM standard attributes to the _aerobatic section.
       _.extend(aerobaticConfig, {
