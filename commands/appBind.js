@@ -55,6 +55,7 @@ module.exports = function(program, done) {
     log.debug("Fetching organizations");
     api(program, {method: 'GET', path: '/api/profile/orgs'}, function(err, orgs) {
       if (err) return cb(err);
+
       organizations = orgs;
       cb();
     });
@@ -62,9 +63,8 @@ module.exports = function(program, done) {
 
   asyncTasks.push(function(cb) {
     if (organizations.length == 0)
-      return cb();
+      return cb("You don't belong to any organizations. Visit https://portal.aerobaticapp.com/orgs/create to get started.");
 
-    var choices = [{name: 'Personal', value: null}];
     _.each(organizations, function(org) {
       choices.push({name: org.name, value: org.orgId});
     });

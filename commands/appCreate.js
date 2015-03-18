@@ -118,7 +118,10 @@ module.exports = function(program, done) {
       organizations: loadOrganizations
     }, function(err, results){
       if (err) return callback(err);
-      debugger;
+
+      if (results.organizations.length == 0)      
+        return callback("You need to belong to an organization to create a new app. Visit https://portal.aerobaticapp.com/orgs/create to get started.");
+
       promptQuestions(results, function(answers) {
         callback(null, answers);
       });
@@ -155,7 +158,7 @@ module.exports = function(program, done) {
   function promptQuestions(lookups, callback) {
     var questions = [];
 
-    var orgChoices = [{name: 'Personal', value: null}];
+    var orgChoices = [];
     _.each(lookups.organizations, function(org) {
       orgChoices.push({name: org.name, value: org.orgId});
     });
