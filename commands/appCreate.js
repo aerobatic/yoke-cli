@@ -55,19 +55,22 @@ module.exports = function(program, done) {
 
     log.debug("Setting appDir to %s", appDir);
 
-    if (answers.template) {
-      var branch;
-      if (answers.buildTool)
-        branch = answers.buildTool + '-yoke';
 
+    if (answers.template === 'none') {
+      // Make a new package.json from scratch
       tasks.push(function(cb) {
-        unpackTemplate(answers.template.githubRepo, branch, appDir, cb);  
+        createBlankStart(answers, appDir, cb);
+      });
+    }
+    else if (answers.template) {
+      tasks.push(function(cb) {
+        unpackTemplate(answers.template.githubRepo, null, appDir, cb);  
       });
     }
     else if (program.githubRepo) {
       tasks.push(function(cb) {
         unpackTemplate(program.githubRepo, program.githubBranch, appDir, cb);  
-      }); 
+      });
     }
 
     tasks.push(function(cb) {
@@ -209,7 +212,7 @@ module.exports = function(program, done) {
         var done = this.async();
     
         if (!/^[a-z0-9-_]+$/.test(input))
-          return done("Name may only contain letters, numbers, dashes, and underscores");
+          return done("Name may only contain lowercase letters, numbers, dashes, and underscores");
 
         // TODO: Call API to validate app name is available
         appNameExists(input, function(err, exists) {
@@ -240,26 +243,12 @@ module.exports = function(program, done) {
       choices: buildTemplateChoices(lookups.templates)
     });
 
-    // If the selected template is available in multiple build tools,
-    // allow the dev to select which one.
-    questions.push({
-      type: 'list',
-      name: 'buildTool',
-      message: 'Preferred build tool',
-      choices: function(answers) {
-        return answers.template.buildTools;
-      },
-      when: function(answers) {
-        return answers.template && _.isArray(answers.template.buildTools);
-      }
-    });
-
     program.inquirer.prompt(questions, callback);
   }
 
   function buildTemplateChoices(templates) {
     var choices = [];
-    choices.push({name: 'None', value:null});
+    choices.push({name: 'None', value:'none'});
 
     // debugger;
     templates.forEach(function(template, i) {
@@ -312,6 +301,34 @@ module.exports = function(program, done) {
         return callback(err);
       })
       .on('end', callback);
+  }
+
+  function createBlankStart(answers, appDir, callback) {
+    // Create the bare minimum app code required to run the simulator 
+    // which consists of a package.json with a name attribute and 
+    // a boilerplate index.html file.
+    async.parallel([
+      function(cb) {
+          var packageJson = {
+          name: answers.appName
+        };
+
+        fs.writeFile(path.join(appDir, 'package.json'), 
+          JSON.stringify(packageJson, null, 2), cb);
+      },
+      function(cb) {
+        var blankHtml = "<html>\n" +
+          "\t<head>\n" +
+          "\t\t<title>Blank Aerobatic App</title>\n" +
+          "\t</head>\n" +
+          "\t<body>\n" + 
+          "\t\t<h1>Blank Aerobatic App</h1>\n" +
+          "\t</body>"
+          "</html>";
+
+        fs.writeFile(path.join(appDir, 'index.html'), blankHtml, cb);
+      }
+    ], callback);
   }
 
   function invokeCreateAppApi(answers, callback) {
