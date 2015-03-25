@@ -1,6 +1,6 @@
 {
   "name": "yoke-cli",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Command line interface for building and deploying Aerobatic apps",
   "bin": {
     "yoke": "bin/yoke.js"
@@ -30,7 +30,7 @@
     "express": "^4.10.2",
     "gaze": "0.5.1",
     "glob": "^4.3.5",
-    "inquirer": "^0.8.0",
+    "inquirer": "^0.8.2",
     "jade": "^1.7.0",
     "lodash": "^2.4.1",
     "minimatch": "^2.0.1",

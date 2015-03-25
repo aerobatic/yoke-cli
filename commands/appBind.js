@@ -65,8 +65,8 @@ module.exports = function(program, done) {
     if (organizations.length == 0)
       return cb("You don't belong to any organizations. Visit https://portal.aerobaticapp.com/orgs/create to get started.");
 
-    _.each(organizations, function(org) {
-      choices.push({name: org.name, value: org.orgId});
+    var choices = _.map(organizations, function(org) {
+      return {name: org.name, value: org.orgId}
     });
 
     var pickOrgQuestion = {

@@ -6,6 +6,7 @@ var zlib = require('zlib');
 var tar = require('tar');
 var fs = require('fs');
 var path = require('path');
+var inquirer = require('inquirer');
 var spawn = require('../lib/spawn');
 var api = require('../lib/api');
 var log = require('../lib/log');
@@ -25,7 +26,6 @@ module.exports = function(program, done) {
   program = _.defaults(program || {}, {
     templatesUrl: 'https://raw.githubusercontent.com/aerobatic/markdown-content/master/metadata/appTemplates.json',
     githubUrl: 'https://github.com',
-    inquirer: require('inquirer'),
     baseDir: process.cwd()
   });
 
@@ -99,16 +99,16 @@ module.exports = function(program, done) {
     async.series(tasks, function(err) {
       if (err) return done(err);
 
-      log.success("App created at %s", createdApp.url);
-      log.info("Ready to launch the dev simulator and start coding!");
+      var message = "App created successfully at:\n" + createdApp.url + "\n\n";
+      
 
-      if (answers.existing === true) {
-        log.info("Run: " + chalk.cyan(chalk.underline("yoke sim -o")));
-      }
-      else {
-        log.info("Switch to your new app directory: " + chalk.cyan(chalk.underline("cd " + answers.appName)));
-        log.info("Then run: " + chalk.cyan(chalk.underline("yoke sim -o")));
-      }
+      if (answers.existing === true)
+        message += "To start developing run:\n$ yoke sim -o";
+      else
+        message += "To start developing run:\n$ cd " + createdApp.name + "\n\nThen:\n$ yoke sim -o";
+
+      message += "\n\nWhen you are ready to deploy, simply run:\n$ yoke deploy";
+      log.messageBox(message);
 
       done(null, createdApp);
     });
@@ -125,9 +125,7 @@ module.exports = function(program, done) {
       if (results.organizations.length == 0)      
         return callback("You need to belong to an organization to create a new app. Visit https://portal.aerobaticapp.com/orgs/create to get started.");
 
-      promptQuestions(results, function(answers) {
-        callback(null, answers);
-      });
+      promptQuestions(results, callback);
     });
   }
 
@@ -203,35 +201,6 @@ module.exports = function(program, done) {
       }
     });
 
-    // Prompt for input of the app name
-    questions.push({
-      type:'input', 
-      message: 'App name',
-      name:'appName', 
-      validate: function(input) {
-        var done = this.async();
-    
-        if (!/^[a-z0-9-_]+$/.test(input))
-          return done("Name may only contain lowercase letters, numbers, dashes, and underscores");
-
-        // TODO: Call API to validate app name is available
-        appNameExists(input, function(err, exists) {
-          if (err) {
-            log.error(err);
-            return done(err);
-          }
-
-          if (exists)
-            done("App name " + input + " is not available.");
-          else
-            done(true);
-        });
-      },
-      when: function(answers) {
-        return answers.confirmExistingDir !== false;
-      }
-    });
-
     // Prompt user for which app template to start from
     questions.push({
       type: 'list',
@@ -243,7 +212,54 @@ module.exports = function(program, done) {
       choices: buildTemplateChoices(lookups.templates)
     });
 
-    program.inquirer.prompt(questions, callback);
+    inquirer.prompt(questions, function(answers) {
+      if (answers.confirmExistingDir === false)
+        return callback(answers);
+
+      collectAppName(function(err, appName) {
+        if (err) return callback(err);
+
+        answers.appName = appName;
+        callback(null, answers);
+      })
+    });
+  }
+
+  function collectAppName(callback) {
+    log.messageBox("Please choose a name for your app which will be used as\nthe URL, i.e. http://<app_name>.aerobaticapp.com>.\nNames may only contain lowercase letters, numbers, \ndashes, and underscores.");
+
+    var question = {
+      type:'input', 
+      message: 'App name',
+      name:'appName', 
+      validate: function(input) {    
+        if (!/^[a-z0-9-_]+$/.test(input))
+          return "Invalid app name";          
+        else
+          return true;
+      }
+    };
+
+    var appName = null;
+
+    // Keep prompting for an appname until one is chosen that doesn't already exist.
+    async.until(function() {
+      return appName != null;
+    }, function(cb) {
+      inquirer.prompt([question], function(answers) {
+        appNameExists(answers.appName, function(err, exists) {
+          if (exists)
+            console.log(chalk.red(">>") + " App name \"" + answers.appName + "\" is already taken. Please choose another name.");            
+          else
+            appName = answers.appName;
+
+          cb();
+        });
+      });
+    }, function(err) {
+      if (err) return callback(err);
+      callback(null, appName);
+    });
   }
 
   function buildTemplateChoices(templates) {
@@ -361,6 +377,7 @@ module.exports = function(program, done) {
       path: '/api/apps/' + appName
     };
 
+    log.debug("checking if app name exists");
     api(program, options, function(err, body, statusCode) {
       if (err) return callback(err);
 
