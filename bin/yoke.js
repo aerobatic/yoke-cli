@@ -10,9 +10,13 @@ var _ = require('lodash');
 var async = require('async');
 var log = require('../lib/log');
 var updateNotifier = require('update-notifier');
+var shortid = require('shortid');
 var pkg = require('../package.json');
 
 require('simple-errors');
+
+// Limit any generated IDs to alpha-numeric characters
+shortid.characters('0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ$-');
 
 updateNotifier({
   packageName: pkg.name,

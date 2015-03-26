@@ -33,8 +33,6 @@ module.exports = function(program, done) {
     userId: program.userId
   };
 
-  versionData.storageKey = versionData.versionId;
-
   var asyncTasks = [], aerobaticApp, deployFiles, newVersion, skipBuildStep;
 
   asyncTasks.push(function(cb) {
@@ -150,16 +148,7 @@ module.exports = function(program, done) {
       log.debug("Running in unattended mode");
       // Assuming that a CI process would have already run the build step.
       runBuildStep = false;
-      if (_.isEmpty(program.versionName) === false) {
-        var versionNameError = validateVersionName(program.versionName);
-        if (_.isString(versionNameError))
-          return callback(versionNameError);
-
-        versionData.name = program.versionName;
-      }
-      else
-        versionData.name = getDefaultVersion();
-
+      versionData.name = program.versionName;
       versionData.message = program.message;
       
       return callback();
@@ -172,14 +161,13 @@ module.exports = function(program, done) {
       {
         type: 'input',
         name: 'version',
-        message: 'Version name',
-        default: getDefaultVersion(),
+        message: 'Version name (leave blank to auto-generate):',
         validate: validateVersionName
       },
       {
         type: 'input',
         name: 'message',
-        message: 'Message (optional)'
+        message: 'Message (optional):'
       },
       {
         type: 'confirm',
@@ -216,18 +204,10 @@ module.exports = function(program, done) {
     });
   }
 
-  function getDefaultVersion() {
-    // Look first to the version attribute in the NPM config. When yoke is initialized
-    // the version from package.json is written to program.appVersion.
-    if (program.appVersion)
-      return program.appVersion;
-
-    // Fallback to a local timestamp
-    var now = new Date();
-    return util.format("%s-%s-%s-%s:%s", now.getFullYear(), now.getMonth() + 1, now.getDate(), now.getHours(), now.getMinutes());
-  }
-
   function validateVersionName(name) {
+    if (_.isEmpty(name))
+      return true;
+
     if (/^[a-z\.\_\-0-9]{5,20}$/i.test(name) !== true)
       return "Version " + name + " can only consist of letters, numbers, dashes, periods, or underscores and must be between 5 and 20 characters";
     return true;
@@ -243,7 +223,7 @@ module.exports = function(program, done) {
       // Ensure the slashes are forward in the relative path
       var relativePath = file.replace(/\\/g, '/');
 
-      var uploadPath = versionData.storageKey + '/' + relativePath;
+      var uploadPath = versionData.versionId + '/' + relativePath;
       uploadCount++;
 
       var compress = shouldCompress(file);
